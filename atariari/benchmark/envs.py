@@ -13,7 +13,7 @@ from baselines import bench
 from baselines.common.atari_wrappers import make_atari, EpisodicLifeEnv, FireResetEnv, WarpFrame, ScaledFloatFrame, \
     ClipRewardEnv, FrameStack
 from .wrapper import AtariARIWrapper
-
+import errno
 
 def make_env(env_id, seed, rank, log_dir, downsample=True, color=False):
     def _thunk():
@@ -57,7 +57,12 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False):
 
 
 def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu')):
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        Path(log_dir).mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        if exc.errno != errno.EEXIST:
+            raise
+        pass
     envs = [make_env(env_name, seed, i, log_dir, downsample, color)
             for i in range(num_processes)]
 
