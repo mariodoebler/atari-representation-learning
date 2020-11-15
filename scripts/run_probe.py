@@ -8,7 +8,7 @@ import wandb
 import sys
 from atariari.methods.majority import majority_baseline
 from atariari.benchmark.episodes import get_episodes
-
+import os
 
 def run_probe(args):
     wandb.config.update(vars(args))
@@ -86,5 +86,7 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
     tags = ['probe']
+    if args.wandb_off:
+        os.environ["WANDB_MODE"] = "dryrun"
     wandb.init(project=args.wandb_proj, entity=args.wandb_entity, tags=tags)
     run_probe(args)
