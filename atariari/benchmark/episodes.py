@@ -12,6 +12,7 @@ try:
 except:
     pass
 
+from PIL import Image
 
 checkpointed_steps_full = [10753536, 1076736, 11828736, 12903936, 13979136, 15054336, 1536, 16129536, 17204736,
                            18279936,
@@ -44,6 +45,11 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
             np.array([np.random.randint(1, envs.action_space.n) for _ in range(num_processes)])) \
             .unsqueeze(dim=1)
         obs, reward, done, infos = envs.step(action) # obs.shape: [num_processes, num-stacks, height, width]
+        if step > 90:
+            img_obs = envs.render('rgb_array')
+            im = Image.fromarray(img_obs)
+            im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
+            torch.save(obs, f"/home/cathrin/MA/datadump/obs_{step}.pt")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
