@@ -5,8 +5,10 @@ import numpy as np
 import torch
 import time
 import os
+from .envs_own import make_vec_envs_own, make_atari_env
 from .envs import make_vec_envs
 from .utils import download_run
+from PIL import Image
 try:
     import wandb
 except:
@@ -32,6 +34,10 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
 
 
 def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False):
+    # envs = make_atari_env(env_name, num_processes)
+    # envs = make_vec_envs_own(env_name, num_processes)
+    # envs = make_vec_envs_frame_stack(env_name, seed,  num_processes, num_frame_stack, downsample, color)
+    # num_frame_stack = 1
     envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color)
     envs.reset()
     episode_rewards = deque(maxlen=10)
@@ -43,7 +49,14 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
         action = torch.tensor(
             np.array([np.random.randint(1, envs.action_space.n) for _ in range(num_processes)])) \
             .unsqueeze(dim=1)
+        if step<3:
+            action=torch.tensor([[1]]) # fire
         obs, reward, done, infos = envs.step(action) # obs.shape: [num_processes, num-stacks, height, width]
+        if step > 90:
+            img_obs = envs.render('rgb_array')
+            im = Image.fromarray(img_obs)
+            im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
+            torch.save(obs, f"/home/cathrin/MA/datadump/obs_{step}.pt")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
