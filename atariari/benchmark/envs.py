@@ -10,10 +10,7 @@ import gym
 import numpy as np
 import torch
 from baselines import bench
-from test_atariari.wrapper.atari_wrapper import make_atari, EpisodicLifeEnv, FireResetEnv, WarpFrame, ScaledFloatFrame, \
-    ClipRewardEnv, MaxAndSkipEnv, SkipEnv, SkipAndFrameStack, wrap_deepmind
-# from baselines.common.atari_wrappers import make_atari, EpisodicLifeEnv, FireResetEnv, WarpFrame, ScaledFloatFrame, \
-#     ClipRewardEnv, FrameStack, MaxAndSkipEnv, SkipEnv, SkipAndFrameStack
+from test_atariari.wrapper.atari_wrapper import make_atari, wrap_deepmind
 from .wrapper import AtariARIWrapper
 import errno
 
@@ -29,7 +26,6 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
 
         env.seed(seed + rank)
 
-
         if str(env.__class__.__name__).find('TimeLimit') >= 0:
             env = TimeLimitMask(env)
 
@@ -39,18 +35,8 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
                 os.path.join(log_dir, str(rank)),
                 allow_early_resets=False)
 
-        # if is_atari:
-        #     if len(env.observation_space.shape) == 3:
         env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack)
-        # elif len(env.observation_space.shape) == 3:
-        #     raise NotImplementedError(
-        #         "CNN models work only for atari,\n"
-        #         "please use a custom wrapper for a custom pixel input env.\n"
-        #         "See wrap_deepmind for an example.")
-
-        # If the input has shape (W,H,3), wrap for PyTorch convolutions
-        # obs_shape = env.observation_space.shape
-        # if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
+        # convert to pytorch-style (B, C, H, W)
         env = ImageToPyTorch(env)
 
         return env
