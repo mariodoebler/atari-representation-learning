@@ -155,7 +155,6 @@ def get_episodes(env_name,
                                                              downsample=downsample, color=color)
 
     elif collect_mode == "pretrained_ppo":
-        import wandb
 
         # List of episodes. Each episode is a list of 160x210 observations
         episodes, episode_labels = get_ppo_rollouts(env_name=env_name,

@@ -95,9 +95,6 @@ if __name__ == "__main__":
     tags = ['probe', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
     if args.wandb_off:
         os.environ["WANDB_MODE"] ="dryrun"
-    tags = ['probe']
-    if args.wandb_off:
-        os.environ["WANDB_MODE"] = "dryrun"
     wandb.init(project=args.wandb_proj, entity=args.wandb_entity, tags=tags)
     #print(f"Running now for environment {args.env-name}")
     run_probe(args)
