@@ -1,17 +1,24 @@
-from .label_preprocess import remove_duplicates, remove_low_entropy_labels
-from collections import deque
-from itertools import chain
-import numpy as np
-import torch
-import time
 import os
+import time
+
+from itertools import chain
+from collections import deque
+
+import torch
+import numpy as np
+
+from PIL import Image
+
 from .envs import make_vec_envs
 from .utils import download_run
+from .label_preprocess import remove_duplicates, remove_low_entropy_labels
+
 try:
     import wandb
 except:
     pass
 
+from PIL import Image
 
 checkpointed_steps_full = [10753536, 1076736, 11828736, 12903936, 13979136, 15054336, 1536, 16129536, 17204736,
                            18279936,
@@ -33,17 +40,23 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
 
 def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False):
     envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color)
-    envs.reset();
+    envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
     episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
     episode_labels = [[[]] for _ in range(num_processes)]
+    debug_save_frames_for_plotting = False
     for step in range(steps // num_processes):
         # Take action using a random policy
         action = torch.tensor(
             np.array([np.random.randint(1, envs.action_space.n) for _ in range(num_processes)])) \
             .unsqueeze(dim=1)
-        obs, reward, done, infos = envs.step(action)
+        obs, reward, done, infos = envs.step(action) # obs.shape: [num_processes, num-stacks, height, width]
+        if debug_save_frames_for_plotting and step > 90 and step < 100:
+            img_obs = envs.render('rgb_array')
+            im = Image.fromarray(img_obs)
+            im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
+            torch.save(obs, f"/home/cathrin/MA/datadump/obs_{step}.pt")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
@@ -129,7 +142,8 @@ def get_episodes(env_name,
                  collect_mode="random_agent",
                  train_mode="probe",
                  checkpoint_index=-1,
-                 min_episode_length=64):
+                 min_episode_length=64,
+                 wandb=None):
 
     if collect_mode == "random_agent":
         # List of episodes. Each episode is a list of 160x210 observations
@@ -142,6 +156,7 @@ def get_episodes(env_name,
 
     elif collect_mode == "pretrained_ppo":
         import wandb
+
         # List of episodes. Each episode is a list of 160x210 observations
         episodes, episode_labels = get_ppo_rollouts(env_name=env_name,
                                                    steps=steps,
@@ -158,6 +173,7 @@ def get_episodes(env_name,
 
     ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
     episodes = [episodes[i] for i in ep_inds]
+    # print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
     episode_labels = [episode_labels[i] for i in ep_inds]
     episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold)
 

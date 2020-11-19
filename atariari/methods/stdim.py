@@ -78,9 +78,15 @@ class InfoNCESpatioTemporalTrainer(Trainer):
             loss1 = 0.
             for y in range(sy):
                 for x in range(sx):
+                    # shape [B, 128]
                     predictions = self.classifier1(f_t)
+                    # shape [B, 128] --> SPATIAL (slice) location of the feature map 
                     positive = f_t_prev[:, y, x, :]
+                    # shape [B, B]
                     logits = torch.matmul(predictions, positive.t())
+                    # positive pair: i=j; negative pair: i!=j
+                    # i=j: prediction and positive element are from same batch
+                    # "classification" of positive vs negative pairs
                     step_loss = F.cross_entropy(logits, torch.arange(N).to(self.device))
                     loss1 += step_loss
             loss1 = loss1 / (sx * sy)

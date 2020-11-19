@@ -10,12 +10,11 @@ import gym
 import numpy as np
 import torch
 from baselines import bench
-from baselines.common.atari_wrappers import make_atari, EpisodicLifeEnv, FireResetEnv, WarpFrame, ScaledFloatFrame, \
-    ClipRewardEnv, FrameStack
+from test_atariari.wrapper.atari_wrapper import make_atari, wrap_deepmind
 from .wrapper import AtariARIWrapper
+import errno
 
-
-def make_env(env_id, seed, rank, log_dir, downsample=True, color=False):
+def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4):
     def _thunk():
         env = gym.make(env_id)
 
@@ -27,7 +26,6 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False):
 
         env.seed(seed + rank)
 
-
         if str(env.__class__.__name__).find('TimeLimit') >= 0:
             env = TimeLimitMask(env)
 
@@ -37,28 +35,39 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False):
                 os.path.join(log_dir, str(rank)),
                 allow_early_resets=False)
 
-        if is_atari:
-            if len(env.observation_space.shape) == 3:
-                env = wrap_deepmind(env, downsample=downsample, color=color)
-        elif len(env.observation_space.shape) == 3:
-            raise NotImplementedError(
-                "CNN models work only for atari,\n"
-                "please use a custom wrapper for a custom pixel input env.\n"
-                "See wrap_deepmind for an example.")
-
-        # If the input has shape (W,H,3), wrap for PyTorch convolutions
-        obs_shape = env.observation_space.shape
-        if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
-            env = TransposeImage(env, op=[2, 0, 1])
+        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack)
+        # convert to pytorch-style (C, H, W)
+        env = ImageToPyTorch(env)
 
         return env
 
     return _thunk
 
+class ImageToPyTorch(gym.ObservationWrapper):
+    """
+    Change image shape to CWH
+    """
+
+    def __init__(self, env):
+        super(ImageToPyTorch, self).__init__(env)
+        old_shape = self.observation_space.shape
+        self.observation_space = gym.spaces.Box(
+            low=0.0, high=1.0, shape=(old_shape[-1], old_shape[0], old_shape[1]))
+
+    def observation(self, observation):
+        return np.transpose(observation, (2, 0, 1))
+        # return np.swapaxes(observation, 2, 0)
+
+
 
 def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu')):
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    envs = [make_env(env_name, seed, i, log_dir, downsample, color)
+    try:
+        Path(log_dir).mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        if exc.errno != errno.EEXIST:
+            raise
+        pass
+    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack)
             for i in range(num_processes)]
 
     if len(envs) > 1:
@@ -74,8 +83,8 @@ def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=
 
     envs = VecPyTorch(envs, device)
 
-    if num_frame_stack > 1:
-        envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
+    # if num_frame_stack > 1:
+    #     envs = VecPyTorchFrameStack(envs, num_frame_stack, device)
 
     return envs
 
@@ -94,24 +103,28 @@ class GrayscaleWrapper(gym.ObservationWrapper):
         return frame
 
 
-def wrap_deepmind(env, downsample=True, episode_life=True, clip_rewards=True, frame_stack=False, scale=False,
-                  color=False):
-    """Configure environment for DeepMind-style Atari.
-    """
-    if ("videopinball" in str(env.spec.id).lower()) or ('tennis' in str(env.spec.id).lower()) or ('skiing' in str(env.spec.id).lower()):
-        env = WarpFrame(env, width=160, height=210, grayscale=False)
-    if episode_life:
-        env = EpisodicLifeEnv(env)
-    if 'FIRE' in env.unwrapped.get_action_meanings():
-        env = FireResetEnv(env)
-    if downsample:
-        env = WarpFrame(env, grayscale=False)
-    if not color:
-        env = GrayscaleWrapper(env)
-    if scale:
-        env = ScaledFloatFrame(env)
-    if clip_rewards:
-        env = ClipRewardEnv(env)
-    if frame_stack:
-        env = FrameStack(env, 4)
-    return env
+# def wrap_deepmind(env, downsample=True, episode_life=True, clip_rewards=True, frame_stack=False, scale=False,
+#                   color=False):
+#     """Configure environment for DeepMind-style Atari.
+#     """
+#     if ("videopinball" in str(env.spec.id).lower()) or ('tennis' in str(env.spec.id).lower()) or ('skiing' in str(env.spec.id).lower()):
+#         env = WarpFrame(env, width=160, height=210, grayscale=False)
+#     if episode_life:
+#         env = EpisodicLifeEnv(env)
+#     if 'FIRE' in env.unwrapped.get_action_meanings():
+#         env = FireResetEnv(env)
+#     if downsample:
+#         env = WarpFrame(env, grayscale=False)
+#     if not color:
+#         env = GrayscaleWrapper(env)
+#     if scale:
+#         env = ScaledFloatFrame(env)
+#     if clip_rewards:
+#         env = ClipRewardEnv(env)
+#     # if frame_stack: # before that: observation_sace (210, 160, 1)
+#     # env = FrameStack(env, 4) # now: (210, 160, 4)
+#     if frame_stack:
+#         env = SkipAndFrameStack(env, skip=8, k=4)
+#     else:
+#         env = SkipEnv(env, skip=4) # doesn't change observation space
+#     return env

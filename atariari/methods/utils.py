@@ -93,6 +93,7 @@ def get_argparser():
     parser.add_argument("--probe-collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
                         default="random_agent")
     parser.add_argument('--num-runs', type=int, default=1)
+    parser.add_argument('--wandb-off', action='store_true')
     return parser
 
 
