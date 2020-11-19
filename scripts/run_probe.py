@@ -8,7 +8,7 @@ import wandb
 import sys
 from atariari.methods.majority import majority_baseline
 from atariari.benchmark.episodes import get_episodes
-
+import os
 
 def run_probe(args):
     wandb.config.update(vars(args))
@@ -85,6 +85,12 @@ def run_probe(args):
 if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
-    tags = ['probe']
+    if args.batch_size > args.num_processes:
+        print(f"Batch size was set to {args.batch_size} but should be maximum {args.num_processes} (args.num-processes)")
+        sys.exit(0)
+    tags = ['probe', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
+    if args.wandb_off:
+        os.environ["WANDB_MODE"] ="dryrun"
     wandb.init(project=args.wandb_proj, entity=args.wandb_entity, tags=tags)
+    #print(f"Running now for environment {args.env-name}")
     run_probe(args)
