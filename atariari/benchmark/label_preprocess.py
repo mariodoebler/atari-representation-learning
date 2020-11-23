@@ -48,3 +48,28 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3):
                 del obs[key]
     # wandb.log(entropy_dict)
     return episode_labels, entropy_dict
+
+# min_val = 100
+# max_val = 0
+# min_k = ""
+# max_k = ""
+def adjustLabelRangeNegative(labels):
+    for l in labels:
+        for i in l:
+            for k, val in i.items():
+                if "_v_x" or "_v_y" in k:
+                    # global min_val, min_k, max_val, max_k
+                    # if val < min_val:
+                    #     min_val = val  
+                    #     min_k = k
+                    # if val > max_val:
+                    #     max_val = val  
+                    #     max_k = k
+                    i[k] = int(int(val) * 0.5) + 128
+                assert i[k] > 0
+                assert i[k] < 256
+    # print(f"min val {min_val} for key {min_k}")
+    # print(f"max val {max_val} for key {max_k}")
+    return labels
+
+    
