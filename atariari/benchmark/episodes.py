@@ -11,7 +11,7 @@ from PIL import Image
 
 from .envs import make_vec_envs
 from .utils import download_run
-from .label_preprocess import remove_duplicates, remove_low_entropy_labels
+from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRangeNegative
 
 try:
     import wandb
@@ -38,8 +38,8 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
                                   45159936, 46235136, 47310336, 48385536, 49460736, 49999872]
 
 
-def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False):
-    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color)
+def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False):
+    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper)
     envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
@@ -143,7 +143,8 @@ def get_episodes(env_name,
                  train_mode="probe",
                  checkpoint_index=-1,
                  min_episode_length=64,
-                 wandb=None):
+                 wandb=None,
+                 use_extended_wrapper=False):
 
     if collect_mode == "random_agent":
         # List of episodes. Each episode is a list of 160x210 observations
@@ -152,10 +153,9 @@ def get_episodes(env_name,
                                                              seed=seed,
                                                              num_processes=num_processes,
                                                              num_frame_stack=num_frame_stack,
-                                                             downsample=downsample, color=color)
+                                                             downsample=downsample, color=color,use_extended_wrapper=use_extended_wrapper)
 
     elif collect_mode == "pretrained_ppo":
-        import wandb
 
         # List of episodes. Each episode is a list of 160x210 observations
         episodes, episode_labels = get_ppo_rollouts(env_name=env_name,
@@ -173,7 +173,7 @@ def get_episodes(env_name,
 
     ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
     episodes = [episodes[i] for i in ep_inds]
-    # print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
+    print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
     episode_labels = [episode_labels[i] for i in ep_inds]
     episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold)
 
@@ -185,6 +185,10 @@ def get_episodes(env_name,
     inds = np.arange(len(episodes))
     rng = np.random.RandomState(seed=seed)
     rng.shuffle(inds)
+
+    if use_extended_wrapper:
+        episode_labels = adjustLabelRangeNegative(episode_labels)
+
 
     if train_mode == "train_encoder":
         assert len(inds) > 1, "Not enough episodes to split into train and val. You must specify enough steps to get at least two episodes"

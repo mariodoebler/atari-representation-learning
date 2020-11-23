@@ -125,6 +125,8 @@ class ProbeTrainer():
         return preds
 
     def do_one_epoch(self, episodes, label_dicts):
+        min_max = [100, 0]
+        min_key, max_key = None, None
         sample_label = label_dicts[0][0]
         epoch_loss, accuracy = {k + "_loss": [] for k in sample_label.keys() if
                                 not self.early_stoppers[k].early_stop}, \
@@ -140,8 +142,15 @@ class ProbeTrainer():
                 optim.zero_grad()
 
                 label = torch.tensor(label).long().to(self.device)
-                preds = self.probe(x, k)
+                preds = self.probe(x, k)  # preds.shape [B, 256]
 
+                if torch.min(label) < min_max[0]:
+                    min_max[0] = torch.min(label)
+                    min_key = k
+                if torch.max(label) > min_max[1]:
+                    min_max[1] = torch.max(label)
+                    max_key = k
+                # label = torch.tensor([10, 10])
                 loss = self.loss_fn(preds, label)
 
                 epoch_loss[k + "_loss"].append(loss.detach().item())

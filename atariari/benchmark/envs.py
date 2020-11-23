@@ -12,9 +12,10 @@ import torch
 from baselines import bench
 from test_atariari.wrapper.atari_wrapper import make_atari, wrap_deepmind
 from .wrapper import AtariARIWrapper
+from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
 import errno
 
-def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4):
+def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False):
     def _thunk():
         env = gym.make(env_id)
 
@@ -35,7 +36,11 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
                 os.path.join(log_dir, str(rank)),
                 allow_early_resets=False)
 
-        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack)
+        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper)
+        if use_extended_wrapper:
+            # has to be used as last wrapper
+            env = AtariARIWrapperExtendedDeriveLabels(env) # has to be used ADDITIONALLY to AtariARIWrapperExtended!
+
         # convert to pytorch-style (C, H, W)
         env = ImageToPyTorch(env)
 
@@ -60,14 +65,14 @@ class ImageToPyTorch(gym.ObservationWrapper):
 
 
 
-def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu')):
+def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False):
     try:
         Path(log_dir).mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         if exc.errno != errno.EEXIST:
             raise
         pass
-    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack)
+    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack, use_extended_wrapper=use_extended_wrapper)
             for i in range(num_processes)]
 
     if len(envs) > 1:
