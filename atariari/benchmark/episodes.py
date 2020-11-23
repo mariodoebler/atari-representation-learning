@@ -173,6 +173,7 @@ def get_episodes(env_name,
 
     ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
     episodes = [episodes[i] for i in ep_inds]
+    print(f"len episode labels {len(episode_labels)}, ep_inds are {*ep_inds,}")
     print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
     episode_labels = [episode_labels[i] for i in ep_inds]
     episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold)
@@ -185,6 +186,7 @@ def get_episodes(env_name,
     inds = np.arange(len(episodes))
     rng = np.random.RandomState(seed=seed)
     rng.shuffle(inds)
+    print(f"inds shuffled are {*inds,}")
 
     if use_extended_wrapper:
         episode_labels = adjustLabelRangeNegative(episode_labels)
