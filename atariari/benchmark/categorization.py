@@ -37,6 +37,8 @@ summary_key_dict = dict(small_object_localization=small_object_localization_keys
                         score_clock_lives_display=score_clock_lives_display_keys,
                         misc_keys=misc_keys
                         )
+# for which keys use a regression method as evaluation?
+regression_keys = agent_localization_keys + other_localization_keys + small_object_localization_keys
 
 detailed_key_dict = dict(
     agent_localization=agent_localization_keys,

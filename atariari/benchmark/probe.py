@@ -1,13 +1,21 @@
-import torch
-from torch import nn
-from .utils import EarlyStopping, appendabledict, \
-    calculate_multiclass_accuracy, calculate_multiclass_f1_score,\
-    append_suffix, compute_dict_average
-
 from copy import deepcopy
+
 import numpy as np
-from torch.utils.data import RandomSampler, BatchSampler
-from .categorization import summary_key_dict
+
+import torch
+
+from .utils import (append_suffix, appendabledict,
+                    calculate_multiclass_accuracy,
+                    calculate_multiclass_f1_score, compute_dict_average,
+                    EarlyStopping)
+from .categorization import regression_keys, summary_key_dict
+
+from torch import nn
+from torch.utils.data import BatchSampler, RandomSampler
+
+from benchmarking.utils.helpers import calculate_mae_regression_score
+from benchmarking.utils.categorization_extended import (regression_keys_extended,
+                                                        summary_key_dict_extended)
 
 
 class LinearProbe(nn.Module):
@@ -75,7 +83,8 @@ class ProbeTrainer():
                                           num_classes=self.num_classes).to(self.device) for k in sample_label.keys()}
 
         self.early_stoppers = {
-            k: EarlyStopping(patience=self.patience, verbose=False, name=k + "_probe", save_dir=self.save_dir)
+            k: EarlyStopping(patience=self.patience, verbose=False,
+                             name=k + "_probe", save_dir=self.save_dir)
             for k in sample_label.keys()}
 
         self.optimizers = {k: torch.optim.Adam(list(self.probes[k].parameters()),
@@ -115,7 +124,8 @@ class ProbeTrainer():
         elif not self.encoder:
             # if encoder is None then inputs are vectors
             f = batch.detach()
-            assert len(f.squeeze().shape) == 2, "if input is not a batch of vectors you must specify an encoder!"
+            assert len(f.squeeze(
+            ).shape) == 2, "if input is not a batch of vectors you must specify an encoder!"
             preds = probe(f)
 
         else:
@@ -169,9 +179,9 @@ class ProbeTrainer():
 
         return epoch_loss, accuracy
 
-    def do_test_epoch(self, episodes, label_dicts):
+    def do_test_epoch(self, episodes, label_dicts, regression_keys=[]):
         sample_label = label_dicts[0][0]
-        accuracy_dict, f1_score_dict = {}, {}
+        accuracy_dict, f1_score_dict, mae_regression_score_dict = {}, {}, {}
         pred_dict, all_label_dict = {k: [] for k in sample_label.keys()}, \
                                     {k: [] for k in sample_label.keys()}
 
@@ -186,15 +196,18 @@ class ProbeTrainer():
 
         for k in all_label_dict.keys():
             preds, labels = torch.cat(pred_dict[k]).cpu().detach().numpy(),\
-                            torch.cat(all_label_dict[k]).cpu().detach().numpy()
+                torch.cat(all_label_dict[k]).cpu().detach().numpy()
 
             preds = np.argmax(preds, axis=1)
             accuracy = calculate_multiclass_accuracy(preds, labels)
             f1score = calculate_multiclass_f1_score(preds, labels)
             accuracy_dict[k] = accuracy
             f1_score_dict[k] = f1score
+            if k in regression_keys:
+                mae_regression_score_dict[k] = calculate_mae_regression_score(
+                    preds, labels, label_key=k)
 
-        return accuracy_dict, f1_score_dict
+        return accuracy_dict, f1_score_dict, mae_regression_score_dict
 
     def train(self, tr_eps, val_eps, tr_labels, val_labels):
         # if not self.encoder:
@@ -202,22 +215,26 @@ class ProbeTrainer():
         sample_label = tr_labels[0][0]
         self.create_probes(sample_label)
         e = 0
-        all_probes_stopped = np.all([early_stopper.early_stop for early_stopper in self.early_stoppers.values()])
+        all_probes_stopped = np.all(
+            [early_stopper.early_stop for early_stopper in self.early_stoppers.values()])
         while (not all_probes_stopped) and e < self.epochs:
             epoch_loss, accuracy = self.do_one_epoch(tr_eps, tr_labels)
             self.log_results(e, epoch_loss, accuracy)
 
-            val_loss, val_accuracy = self.evaluate(val_eps, val_labels, epoch=e)
+            val_loss, val_accuracy = self.evaluate(
+                val_eps, val_labels, epoch=e)
             # update all early stoppers
             for k in sample_label.keys():
                 if not self.early_stoppers[k].early_stop:
-                    self.early_stoppers[k](val_accuracy["val_" + k + "_acc"], self.probes[k])
+                    self.early_stoppers[k](
+                        val_accuracy["val_" + k + "_acc"], self.probes[k])
 
             for k, scheduler in self.schedulers.items():
                 if not self.early_stoppers[k].early_stop:
                     scheduler.step(val_accuracy['val_' + k + '_acc'])
             e += 1
-            all_probes_stopped = np.all([early_stopper.early_stop for early_stopper in self.early_stoppers.values()])
+            all_probes_stopped = np.all(
+                [early_stopper.early_stop for early_stopper in self.early_stoppers.values()])
         print("All probes early stopped!")
 
     def evaluate(self, val_episodes, val_label_dicts, epoch=None):
@@ -231,15 +248,19 @@ class ProbeTrainer():
             probe.train()
         return epoch_loss, accuracy
 
-    def test(self, test_episodes, test_label_dicts, epoch=None):
+    def test(self, test_episodes, test_label_dicts, epoch=None, use_extended_wrapper=False):
         for k in self.early_stoppers.keys():
             self.early_stoppers[k].early_stop = False
         for k, probe in self.probes.items():
             probe.eval()
-        acc_dict, f1_dict = self.do_test_epoch(test_episodes, test_label_dicts)
 
-        acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
+        regression_keys_list = regression_keys + regression_keys_extended
+        acc_dict, f1_dict, mae_regression_dict = self.do_test_epoch(
+            test_episodes, test_label_dicts, regression_keys=list(set(regression_keys_list)))
 
+        acc_dict, f1_dict = postprocess_raw_metrics(
+            acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper)
+        # mae_f1_dict = postprocess_raw_metrics_regression(f1_dict, mae_regression_dict, use_extended_wrapper)
         print("""In our paper, we report F1 scores and accuracies averaged across each category. 
               That is, we take a mean across all state variables in a category to get the average score for that category.
               Then we average all the category averages to get the final score that we report per game for each method. 
@@ -257,13 +278,25 @@ class ProbeTrainer():
             print("\t --")
 
 
-def postprocess_raw_metrics(acc_dict, f1_dict):
-    acc_overall_avg, f1_overall_avg = compute_dict_average(acc_dict), \
-                                      compute_dict_average(f1_dict)
-    acc_category_avgs_dict, f1_category_avgs_dict = compute_category_avgs(acc_dict), \
-                                                    compute_category_avgs(f1_dict)
-    acc_avg_across_categories, f1_avg_across_categories = compute_dict_average(acc_category_avgs_dict), \
-                                                          compute_dict_average(f1_category_avgs_dict)
+def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=False):
+    mae_f1_dict = combineMAEF1Dicts(mae_regression_dict, f1_dict)
+    acc_overall_avg, f1_overall_avg, mae_regression_dict, mae_f1_dict = compute_dict_average(acc_dict), \
+        compute_dict_average(f1_dict), \
+        compute_dict_average(mae_regression_dict), \
+        compute_dict_average(mae_f1_dict)
+
+    acc_category_avgs_dict, f1_category_avgs_dict, mae_regression_category_avgs_dict, mae_f1_category_avgs_dict = \
+        compute_category_avgs(acc_dict, use_extended_wrapper), \
+        compute_category_avgs(f1_dict, use_extended_wrapper), \
+        compute_category_avgs(mae_regression_dict, use_extended_wrapper), \
+        compute_category_avgs(mae_f1_dict, use_extended_wrapper)
+
+    acc_avg_across_categories, f1_avg_across_categories, mae_regression_avg_across_categories, mae_f1_avg_across_categories = \
+        compute_dict_average(acc_category_avgs_dict), \
+        compute_dict_average(f1_category_avgs_dict), \
+        compute_dict_average(mae_f1_category_avgs_dict), \
+        compute_dict_average(mae_f1_category_avgs_dict)
+
     acc_dict.update(acc_category_avgs_dict)
     f1_dict.update(f1_category_avgs_dict)
 
@@ -277,15 +310,22 @@ def postprocess_raw_metrics(acc_dict, f1_dict):
     return acc_dict, f1_dict
 
 
-def compute_category_avgs(metric_dict):
+def combineMAEF1Dicts(mae_regression_dict, f1_dict):
+    # ORDER important: keys which exist in both are taken from the second dict (regression one) and replace the classification ones!
+    return {**f1_dict, **mae_regression_dict}
+
+
+def compute_category_avgs(metric_dict, use_extended_wrapper=False):
     category_dict = {}
-    for category_name, category_keys in summary_key_dict.items():
-        category_values = [v for k, v in metric_dict.items() if k in category_keys]
+    if use_extended_wrapper:
+        summary_key_dictionary = summary_key_dict_extended
+    else:
+        summary_key_dictionary = summary_key_dict
+    for category_name, category_keys in summary_key_dictionary.items():
+        category_values = [
+            v for k, v in metric_dict.items() if k in category_keys]
         if len(category_values) < 1:
             continue
         category_mean = np.mean(category_values)
         category_dict[category_name + "_avg"] = category_mean
     return category_dict
-
-
-
