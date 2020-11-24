@@ -12,7 +12,7 @@ from PIL import Image
 from .envs import make_vec_envs
 from .utils import download_run
 from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRangeNegative
-
+from benchmarking.utils.helpers import countAndReportSampleNumbers
 try:
     import wandb
 except:
@@ -196,6 +196,7 @@ def get_episodes(env_name,
         assert len(inds) > 1, "Not enough episodes to split into train and val. You must specify enough steps to get at least two episodes"
         split_ind = int(0.8 * len(inds))
         tr_eps, val_eps = episodes[:split_ind], episodes[split_ind:]
+        countAndReportSampleNumbers(tr_eps, val_eps)
         return tr_eps, val_eps
 
     if train_mode == "probe":
@@ -210,6 +211,7 @@ def get_episodes(env_name,
         test_ep_inds = [i for i in range(len(test_eps)) if len(test_eps[i]) > 1]
         test_eps = [test_eps[i] for i in test_ep_inds]
         test_labels = [test_labels[i] for i in test_ep_inds]
+        countAndReportSampleNumbers(training=tr_labels, validation=val_labels, test=test_labels, wandb=wandb)
         return tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels
 
     if train_mode == "dry_run":

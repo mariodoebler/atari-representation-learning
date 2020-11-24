@@ -40,7 +40,8 @@ class ProbeTrainer():
                  num_classes=256,
                  fully_supervised=False,
                  save_dir=".models",
-                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+                 device=torch.device(
+                     "cuda" if torch.cuda.is_available() else "cpu"),
                  lr=5e-4,
                  epochs=100,
                  batch_size=64,
