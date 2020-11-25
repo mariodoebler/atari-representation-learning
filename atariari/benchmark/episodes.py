@@ -196,7 +196,7 @@ def get_episodes(env_name,
         assert len(inds) > 1, "Not enough episodes to split into train and val. You must specify enough steps to get at least two episodes"
         split_ind = int(0.8 * len(inds))
         tr_eps, val_eps = episodes[:split_ind], episodes[split_ind:]
-        countAndReportSampleNumbers(tr_eps, val_eps)
+        countAndReportSampleNumbers(training=tr_eps, validation=val_eps)
         return tr_eps, val_eps
 
     if train_mode == "probe":
