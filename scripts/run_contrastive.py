@@ -64,7 +64,7 @@ def train_encoder(args):
     else:
         assert False, "method {} has no trainer".format(args.method)
 
-    trainer.train(tr_eps, val_eps)
+    trainer.train(tr_eps, val_eps, passing_file=args.passing-file)
 
     return encoder
 

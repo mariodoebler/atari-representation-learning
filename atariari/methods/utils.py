@@ -94,6 +94,7 @@ def get_argparser():
                         default="random_agent")
     parser.add_argument('--num-runs', type=int, default=1)
     parser.add_argument('--wandb-off', action='store_true')
+    parser.add_argument('--name-logging', type=str)
     return parser
 
 

@@ -1,6 +1,9 @@
 import os
 import sys
 
+import torch
+import wandb
+
 from scripts.run_contrastive import train_encoder
 
 from atariari.methods.utils import (get_argparser, probe_only_methods,
@@ -9,9 +12,6 @@ from atariari.methods.encoders import ImpalaCNN, NatureCNN, PPOEncoder
 from atariari.methods.majority import majority_baseline
 from atariari.benchmark.probe import ProbeTrainer
 from atariari.benchmark.episodes import get_episodes
-
-import torch
-import wandb
 
 
 def run_probe(args):
@@ -56,7 +56,8 @@ def run_probe(args):
         else:
             print("Print loading in encoder weights from probe of type {} from the following path: {}"
                   .format(args.method, args.weights_path))
-            encoder.load_state_dict(torch.load(args.weights_path))
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            encoder.load_state_dict(torch.load(args.weights_path, map_location=device))
             encoder.eval()
 
     torch.set_num_threads(1)
@@ -89,6 +90,9 @@ def run_probe(args):
 if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
+    if (args.weights_path and args.passing_file) is None:
+        args.train_encoder = False
+
     # if args.batch_size > args.num_processes:
     #     print(f"Batch size was set to {args.batch_size} but should be maximum {args.num_processes} (args.num-processes)")
     #     sys.exit(0)
