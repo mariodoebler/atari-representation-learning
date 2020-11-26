@@ -155,6 +155,7 @@ class NatureCNN(nn.Module):
         if fmaps:
             return {
                 'f5': f5.permute(0, 2, 3, 1),
+                'f7_not_permuted': f7,
                 'f7': f7.permute(0, 2, 3, 1),
                 'out': out
             }
