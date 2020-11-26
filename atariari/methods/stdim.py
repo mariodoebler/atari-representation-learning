@@ -121,7 +121,7 @@ class InfoNCESpatioTemporalTrainer(Trainer):
         if mode == "val":
             self.early_stopper(-epoch_loss / steps, self.encoder)
 
-    def train(self, tr_eps, val_eps):
+    def train(self, tr_eps, val_eps, passing_file=None):
         # TODO: Make it work for all modes, right now only it defaults to pcl.
         for e in range(self.epochs):
             self.encoder.train(), self.classifier1.train(), self.classifier2.train()
@@ -132,8 +132,16 @@ class InfoNCESpatioTemporalTrainer(Trainer):
 
             if self.early_stopper.early_stop:
                 break
-        torch.save(self.encoder.state_dict(), os.path.join(self.wandb.run.dir, self.config['env_name'] + '.pt'))
-
+        
+        filename = os.path.join(self.wandb.run.dir, self.config['env_name'] + '.pt')
+        torch.save(self.encoder.state_dict(), filename)
+        if passing_file is not None: 
+            passing_file_path = os.path.join(Path.home(),"server_results/path_weights", passing_file)
+            with open(passing_file_path, "w") as f:
+                print(f"weight path {filename} is written to {passing_file_path}")
+                f.write(filename)
+        
+        
     def log_results(self, epoch_idx, epoch_loss1, epoch_loss2, epoch_loss, prefix=""):
         print("{} Epoch: {}, Epoch Loss: {}, {}".format(prefix.capitalize(), epoch_idx, epoch_loss,
                                                                      prefix.capitalize()))
