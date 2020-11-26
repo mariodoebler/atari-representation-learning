@@ -89,9 +89,9 @@ def run_probe(args):
 if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
-    if args.batch_size > args.num_processes:
-        print(f"Batch size was set to {args.batch_size} but should be maximum {args.num_processes} (args.num-processes)")
-        sys.exit(0)
+    # if args.batch_size > args.num_processes:
+    #     print(f"Batch size was set to {args.batch_size} but should be maximum {args.num_processes} (args.num-processes)")
+    #     sys.exit(0)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tags = [device.type, 'probe', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "probe steps: " + str(args.probe_steps), "epochs: " + str(args.epochs)]
     if args.wandb_off:
