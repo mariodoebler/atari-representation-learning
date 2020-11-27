@@ -3,6 +3,10 @@ import time
 from itertools import chain
 from collections import deque
 
+import torch
+import wandb
+import numpy as np
+
 from atariari.methods.cpc import CPCTrainer
 from atariari.methods.vae import VAETrainer
 from atariari.methods.stdim import InfoNCESpatioTemporalTrainer
@@ -14,10 +18,6 @@ from atariari.methods.global_infonce_stdim import GlobalInfoNCESpatioTemporalTra
 from atariari.methods.global_local_infonce import GlobalLocalInfoNCESpatioTemporalTrainer
 from atariari.methods.no_action_feedforward_predictor import NaFFPredictorTrainer
 from atariari.benchmark.episodes import get_episodes
-
-import torch
-import wandb
-import numpy as np
 
 
 def train_encoder(args):
@@ -65,7 +65,7 @@ def train_encoder(args):
     else:
         assert False, "method {} has no trainer".format(args.method)
 
-    trainer.train(tr_eps, val_eps, passing_file=args.passing-file)
+    trainer.train(tr_eps, val_eps, passing_file=args.passing_file)
 
     return encoder
 
