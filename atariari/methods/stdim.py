@@ -12,7 +12,7 @@ from .trainer import Trainer
 from .utils import EarlyStopping
 from torchvision import transforms
 import torchvision.transforms.functional as TF
-
+from pathlib import Path
 
 class Classifier(nn.Module):
     def __init__(self, num_inputs1, num_inputs2):
@@ -136,7 +136,7 @@ class InfoNCESpatioTemporalTrainer(Trainer):
         filename = os.path.join(self.wandb.run.dir, self.config['env_name'] + '.pt')
         torch.save(self.encoder.state_dict(), filename)
         if passing_file is not None: 
-            passing_file_path = os.path.join(Path.home(),"server_results/path_weights", passing_file)
+            passing_file_path = os.path.join(Path.home(), "server_results/path_weights", passing_file)
             with open(passing_file_path, "w") as f:
                 print(f"weight path {filename} is written to {passing_file_path}")
                 f.write(filename)
