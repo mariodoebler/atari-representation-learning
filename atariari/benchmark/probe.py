@@ -53,7 +53,9 @@ class ProbeTrainer():
                  lr=5e-4,
                  epochs=100,
                  batch_size=64,
-                 representation_len=256):
+                 representation_len=256,
+                 just_use_one_input_dim=False,
+                 use_extended_wrapper=True):
 
         self.encoder = encoder
         self.wandb = wandb
@@ -68,6 +70,8 @@ class ProbeTrainer():
         self.method = method_name
         self.feature_size = representation_len
         self.loss_fn = nn.CrossEntropyLoss()
+        self.just_use_one_input_dim = just_use_one_input_dim
+        self.use_extended_wrapper = use_extended_wrapper
 
         # bad convention, but these get set in "create_probes"
         self.probes = self.early_stoppers = self.optimizers = self.schedulers = None
@@ -110,7 +114,10 @@ class ProbeTrainer():
             for ep_ind, episode in enumerate(episodes_batch):
                 # Get one sample from this episode
                 t = np.random.randint(len(episode))
-                xs.append(episode[t])
+                x = episode[t]
+                if self.just_use_one_input_dim:
+                    x = torch.unsqueeze(x[-1, :, :], 0)
+                xs.append(x)
                 labels.append_update(episode_labels_batch[ep_ind][t])
             yield torch.stack(xs).float().to(self.device) / 255., labels
 
@@ -136,8 +143,8 @@ class ProbeTrainer():
         return preds
 
     def do_one_epoch(self, episodes, label_dicts):
-        min_max = [100, 0]
-        min_key, max_key = None, None
+        # min_max = [100, 0]
+        # min_key, max_key = None, None
         sample_label = label_dicts[0][0]
         epoch_loss, accuracy = {k + "_loss": [] for k in sample_label.keys() if
                                 not self.early_stoppers[k].early_stop}, \
@@ -155,13 +162,12 @@ class ProbeTrainer():
                 label = torch.tensor(label).long().to(self.device)
                 preds = self.probe(x, k)  # preds.shape [B, 256]
 
-                if torch.min(label) < min_max[0]:
-                    min_max[0] = torch.min(label)
-                    min_key = k
-                if torch.max(label) > min_max[1]:
-                    min_max[1] = torch.max(label)
-                    max_key = k
-                # label = torch.tensor([10, 10])
+                # if torch.min(label) < min_max[0]:
+                #     min_max[0] = torch.min(label)
+                #     min_key = k
+                # if torch.max(label) > min_max[1]:
+                #     min_max[1] = torch.max(label)
+                #     max_key = k
                 loss = self.loss_fn(preds, label)
 
                 epoch_loss[k + "_loss"].append(loss.detach().item())
@@ -248,7 +254,7 @@ class ProbeTrainer():
             probe.train()
         return epoch_loss, accuracy
 
-    def test(self, test_episodes, test_label_dicts, epoch=None, use_extended_wrapper=False):
+    def test(self, test_episodes, test_label_dicts, epoch=None):
         for k in self.early_stoppers.keys():
             self.early_stoppers[k].early_stop = False
         for k, probe in self.probes.items():
@@ -261,7 +267,7 @@ class ProbeTrainer():
         # for regression-metrics-comparison
         wanted_keys = regression_keys_list + ["across_categories_avg", "overall_avg"]
         acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, metrics_per_category_dict, table_test = postprocess_raw_metrics(
-            acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper, wanted_keys)
+            acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_keys=wanted_keys)
         print("""In our paper, we report F1 scores and accuracies averaged across each category. 
               That is, we take a mean across all state variables in a category to get the average score for that category.
               Then we average all the category averages to get the final score that we report per game for each method. 
@@ -279,7 +285,7 @@ class ProbeTrainer():
             print("\t --")
 
 
-def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=False, wanted_keys: List[str] = []) -> Union[dict, dict, dict, dict, dict]:
+def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper, wanted_keys: List[str] = []) -> Union[dict, dict, dict, dict, dict]:
     mae_f1_dict = combineMAEF1Dicts(mae_regression_dict, f1_dict)
     acc_overall_avg, f1_overall_avg, mae_regression_overall_avg, mae_f1_overall_avg = compute_dict_average(acc_dict), \
         compute_dict_average(f1_dict), \
@@ -310,7 +316,7 @@ def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended
     mae_regression_dict["across_categories_avg"], mae_f1_dict["across_categories_avg"] = \
         [mae_regression_avg_across_categories, mae_f1_avg_across_categories]
 
-    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_keys=wanted_keys, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
+    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=wanted_keys, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
     table_test = createTableList(f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
     
     acc_dict = append_suffix(acc_dict, "_acc")
@@ -326,7 +332,7 @@ def combineMAEF1Dicts(mae_regression_dict, f1_dict):
     return {**f1_dict, **mae_regression_dict}
 
 
-def compute_category_avgs(metric_dict, use_extended_wrapper=False):
+def compute_category_avgs(metric_dict, use_extended_wrapper):
     category_dict = {}
     if use_extended_wrapper:
         summary_key_dictionary = summary_key_dict_extended

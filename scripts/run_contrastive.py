@@ -1,21 +1,22 @@
 import time
-from collections import deque
+
 from itertools import chain
+from collections import deque
 
-import numpy as np
 import torch
+import wandb
+import numpy as np
 
+from atariari.methods.cpc import CPCTrainer
+from atariari.methods.vae import VAETrainer
+from atariari.methods.stdim import InfoNCESpatioTemporalTrainer
+from atariari.methods.utils import get_argparser
+from atariari.methods.encoders import ImpalaCNN, NatureCNN
+from atariari.methods.jsd_stdim import SpatioTemporalTrainer
 from atariari.methods.dim_baseline import DIMTrainer
 from atariari.methods.global_infonce_stdim import GlobalInfoNCESpatioTemporalTrainer
 from atariari.methods.global_local_infonce import GlobalLocalInfoNCESpatioTemporalTrainer
-from atariari.methods.jsd_stdim import SpatioTemporalTrainer
-from atariari.methods.utils import get_argparser
-from atariari.methods.encoders import NatureCNN, ImpalaCNN
-from atariari.methods.cpc import CPCTrainer
-from atariari.methods.vae import VAETrainer
 from atariari.methods.no_action_feedforward_predictor import NaFFPredictorTrainer
-from atariari.methods.stdim import InfoNCESpatioTemporalTrainer
-import wandb
 from atariari.benchmark.episodes import get_episodes
 
 
@@ -66,7 +67,7 @@ def train_encoder(args):
     else:
         assert False, "method {} has no trainer".format(args.method)
 
-    trainer.train(tr_eps, val_eps, passing_file=args.passing-file)
+    trainer.train(tr_eps, val_eps, passing_file=args.passing_file)
 
     return encoder
 
@@ -77,9 +78,9 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tags = [device.type, 'pretraining-only', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
     if args.name_logging:
-        wandb.init(project=args.wandb_proj, entity="curl-atari", tags=tags)
+        wandb.init(project=args.wandb_proj, tags=tags)
     else:
-        wandb.init(project=args.wandb_proj, entity="curl-atari", tags=tags, name=args.name_logging)
+        wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
     config = {}
     config.update(vars(args))
     wandb.config.update(config)
