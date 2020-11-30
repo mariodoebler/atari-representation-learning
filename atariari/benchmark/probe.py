@@ -316,7 +316,7 @@ def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended
     mae_regression_dict["across_categories_avg"], mae_f1_dict["across_categories_avg"] = \
         [mae_regression_avg_across_categories, mae_f1_avg_across_categories]
 
-    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_keys=wanted_keys, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
+    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=wanted_keys, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
     table_test = createTableList(f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
     
     acc_dict = append_suffix(acc_dict, "_acc")
