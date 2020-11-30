@@ -96,6 +96,7 @@ def get_argparser():
     parser.add_argument('--wandb-off', action='store_true')
     parser.add_argument('--name-logging', type=str)
     parser.add_argument('--passing-file', default=None, type=str)
+    parser.add_argument('--use-extended-wrapper', action='store_true')
     return parser
 
 
