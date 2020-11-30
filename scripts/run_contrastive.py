@@ -32,7 +32,9 @@ def train_encoder(args):
                                  collect_mode=args.probe_collect_mode,
                                  train_mode="train_encoder",
                                  checkpoint_index=args.checkpoint_index,
-                                 min_episode_length=args.batch_size)
+                                 min_episode_length=args.batch_size,
+                                 wandb=wandb
+                                 use_extended_wrapper=args.use_extended_wrapper)
 
     observation_shape = tr_eps[0][0].shape
     if args.encoder_type == "Nature":
