@@ -77,7 +77,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tags = [device.type, 'pretraining-only', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
-    if args.name_logging:
+    if not args.name_logging:
         wandb.init(project=args.wandb_proj, tags=tags)
     else:
         wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
