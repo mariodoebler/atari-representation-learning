@@ -34,7 +34,7 @@ def train_encoder(args):
                                  train_mode="train_encoder",
                                  checkpoint_index=args.checkpoint_index,
                                  min_episode_length=args.batch_size,
-                                 wandb=wandb
+                                 wandb=wandb,
                                  use_extended_wrapper=args.use_extended_wrapper)
 
     observation_shape = tr_eps[0][0].shape
