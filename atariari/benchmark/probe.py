@@ -139,6 +139,8 @@ class ProbeTrainer():
             with torch.no_grad():
                 self.encoder.to(self.device)
                 f = self.encoder(batch).detach()
+            if len(f.shape) == 4:
+                f = f.reshape(f.size(0), -1)
             preds = probe(f)
         return preds
 
