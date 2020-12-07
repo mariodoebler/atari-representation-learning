@@ -260,12 +260,16 @@ class ProbeTrainer():
         for k, probe in self.probes.items():
             probe.eval()
 
-        regression_keys_list = list(set(regression_keys + regression_keys_extended))
+        if self.use_extended_wrapper:
+            regression_keys_ext = regression_keys_extended
+        else:
+            regression_keys_ext = []
+        regression_keys_list = list(set(regression_keys + regression_keys_ext))
         acc_dict, f1_dict, mae_regression_dict = self.do_test_epoch(
             test_episodes, test_label_dicts, regression_keys=regression_keys_list)
 
         # for regression-metrics-comparison
-        wanted_keys = regression_keys_list + ["across_categories_avg", "overall_avg"]
+        wanted_keys = list(set(list(summary_key_dict_extended.keys()) + ["across_categories_avg", "overall_avg"]))
         acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, metrics_per_category_dict, table_test = postprocess_raw_metrics(
             acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_keys=wanted_keys)
         print("""In our paper, we report F1 scores and accuracies averaged across each category. 
@@ -338,11 +342,18 @@ def compute_category_avgs(metric_dict, use_extended_wrapper):
         summary_key_dictionary = summary_key_dict_extended
     else:
         summary_key_dictionary = summary_key_dict
+
+    print("\nCategories are:")
     for category_name, category_keys in summary_key_dictionary.items():
         category_values = [
             v for k, v in metric_dict.items() if k in category_keys]
+        category_values_names = [k for k, v in metric_dict.items() if k in category_keys]
         if len(category_values) < 1:
             continue
         category_mean = np.mean(category_values)
         category_dict[category_name + "_avg"] = category_mean
+        print(category_name)
+        for v in category_values_names:
+            print("\t" + v)
+
     return category_dict
