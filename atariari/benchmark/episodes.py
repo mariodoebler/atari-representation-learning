@@ -45,18 +45,21 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
     print('-------Collecting samples----------')
     episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
     episode_labels = [[[]] for _ in range(num_processes)]
-    debug_save_frames_for_plotting = False
+    debug_save_frames_for_plotting = True
+    if debug_save_frames_for_plotting:
+        print(f"frame-set \t \t vel")
     for step in range(steps // num_processes):
         # Take action using a random policy
         action = torch.tensor(
             np.array([np.random.randint(1, envs.action_space.n) for _ in range(num_processes)])) \
             .unsqueeze(dim=1)
         obs, reward, done, infos = envs.step(action) # obs.shape: [num_processes, num-stacks, height, width]
-        if debug_save_frames_for_plotting and step > 90 and step < 100:
-            img_obs = envs.render('rgb_array')
-            im = Image.fromarray(img_obs)
-            im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
-            torch.save(obs, f"/home/cathrin/MA/datadump/obs_{step}.pt")
+        if debug_save_frames_for_plotting and step < 100:
+            # img_obs = envs.render('rgb_array')
+            # im = Image.fromarray(img_obs)
+            # im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
+            torch.save(obs[0, :, :, :], f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
+            print(f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
