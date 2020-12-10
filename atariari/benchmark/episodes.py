@@ -12,7 +12,7 @@ from PIL import Image
 from .envs import make_vec_envs
 from .utils import download_run
 from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRangeNegative
-from benchmarking.utils.helpers import countAndReportSampleNumbers
+from benchmarking.utils.helpers import countAndReportSampleNumbers, remove_invalid_episodes
 try:
     import wandb
 except:
@@ -45,9 +45,9 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
     print('-------Collecting samples----------')
     episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
     episode_labels = [[[]] for _ in range(num_processes)]
-    debug_save_frames_for_plotting = True
+    debug_save_frames_for_plotting = True and not torch.cuda.is_available()  # do NOT do this on the server, just for testing on computer
     if debug_save_frames_for_plotting:
-        print(f"frame-set \t \t vel")
+        print(f"frame-set\t\tvel1\t\tvel2")
     for step in range(steps // num_processes):
         # Take action using a random policy
         action = torch.tensor(
@@ -58,8 +58,13 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
             # img_obs = envs.render('rgb_array')
             # im = Image.fromarray(img_obs)
             # im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
-            torch.save(obs[0, :, :, :], f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
-            print(f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}")
+            torch.save(obs, f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
+            if 'pong' in env_name.lower() and infos[0].get('labels', None):
+                print(f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
+            elif 'pacman' in env_name.lower() and infos[0].get('labels', None):
+                print(f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['enemy_sue_v_x']}")
+            elif 'breakout' in env_name.lower() and infos[0].get('labels', None):
+                print(f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
@@ -82,14 +87,15 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
 
 
 def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
-                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1):
+                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True):
     checkpoint_step = checkpointed_steps_full_sorted[checkpoint_index]
     filepath = download_run(env_name, checkpoint_step)
     while not os.path.exists(filepath):
         time.sleep(5)
 
-    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color)
+    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper)
 
+    # filepath = 
     actor_critic, ob_rms = torch.load(filepath, map_location=lambda storage, loc: storage)
 
     episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
@@ -98,6 +104,9 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
 
     masks = torch.zeros(1, 1)
     obs = envs.reset()
+    if just_use_one_input_dim:
+        obs = obs[:, -1, :, :]
+        obs = obs.unsqueeze(1)
     entropies = []
     for step in range(steps // num_processes):
         # Take action using the PPO policy
@@ -107,6 +116,9 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
                                for i in range(num_processes)]).unsqueeze(dim=1)
         entropies.append(dist_entropy.clone())
         obs, reward, done, infos = envs.step(action)
+        if just_use_one_input_dim:
+            obs = obs[:, -1, :, :]
+            obs = obs.unsqueeze(1)
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
@@ -147,7 +159,8 @@ def get_episodes(env_name,
                  checkpoint_index=-1,
                  min_episode_length=64,
                  wandb=None,
-                 use_extended_wrapper=False):
+                 use_extended_wrapper=False,
+                 just_use_one_input_dim=True):
 
     if collect_mode == "random_agent":
         # List of episodes. Each episode is a list of 160x210 observations
@@ -156,7 +169,7 @@ def get_episodes(env_name,
                                                              seed=seed,
                                                              num_processes=num_processes,
                                                              num_frame_stack=num_frame_stack,
-                                                             downsample=downsample, color=color,use_extended_wrapper=use_extended_wrapper)
+                                                             downsample=downsample, color=color ,use_extended_wrapper=use_extended_wrapper)
 
     elif collect_mode == "pretrained_ppo":
 
@@ -168,7 +181,7 @@ def get_episodes(env_name,
                                                    num_frame_stack=num_frame_stack,
                                                    downsample=downsample,
                                                    color=color,
-                                                   checkpoint_index=checkpoint_index)
+                                                   checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,just_use_one_input_dim=just_use_one_input_dim)
 
 
     else:
@@ -179,12 +192,15 @@ def get_episodes(env_name,
     print(f"len episode labels {len(episode_labels)}, ep_inds are {*ep_inds,}")
     print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
     episode_labels = [episode_labels[i] for i in ep_inds]
-    episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold)
+    if train_mode == "probe":
+        episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
+    episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
 
     try:
         wandb.log(entropy_dict)
     except:
         pass
+
 
     inds = np.arange(len(episodes))
     rng = np.random.RandomState(seed=seed)
@@ -192,7 +208,7 @@ def get_episodes(env_name,
     print(f"inds shuffled are {*inds,}")
 
     if use_extended_wrapper:
-        episode_labels = adjustLabelRangeNegative(episode_labels)
+        episode_labels = adjustLabelRangeNegative(episode_labels, env_name)
 
 
     if train_mode == "train_encoder":

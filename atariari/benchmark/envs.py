@@ -36,10 +36,12 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
                 os.path.join(log_dir, str(rank)),
                 allow_early_resets=False)
 
+        # env = gym.wrappers.Monitor(env, '/home/cathrin/MA/datadump/videos/' + env_id, force=True)
+
         env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper)
-        if use_extended_wrapper:
-            # has to be used as last wrapper
-            env = AtariARIWrapperExtendedDeriveLabels(env) # has to be used ADDITIONALLY to AtariARIWrapperExtended!
+        # if use_extended_wrapper:
+        #     # has to be used as last wrapper
+        #     env = AtariARIWrapperExtendedDeriveLabels(env) # has to be used ADDITIONALLY to AtariARIWrapperExtended!
 
         # convert to pytorch-style (C, H, W)
         env = ImageToPyTorch(env)

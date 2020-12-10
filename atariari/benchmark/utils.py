@@ -21,6 +21,7 @@ def download_run(env_name, checkpoint_step):
     api = wandb.Api()
     runs = list(api.runs("curl-atari/pretrained-rl-agents-2", {"state": "finished",
                                                                "config.env_name": env_name}))
+                                                            
     run = runs[0]
     filename = env_name + '_' + str(checkpoint_step) + '.pt'
     run.files(names=[filename])[0].download(root='./trained_models_full/', replace=True)

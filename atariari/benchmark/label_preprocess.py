@@ -1,6 +1,7 @@
 from itertools import chain
 import torch
 import wandb
+from benchmarking.utils.process_velocities import scalings
 
 
 def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
@@ -22,7 +23,7 @@ def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
     return test_eps, test_labels
 
 
-def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3):
+def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode="train_encoder"):
     flat_label_list = list(chain.from_iterable(episode_labels))
     counts = {}
 
@@ -42,22 +43,29 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3):
             print("Deleting {} for being too low in entropy! Sorry, dood!".format(k))
             low_entropy_labels.append(k)
 
-    for e in episode_labels:
-        for obs in e:
-            for key in low_entropy_labels:
-                del obs[key]
-    # wandb.log(entropy_dict)
+    # just necessary to remove specific labels if they're needed for probing
+    # for pretraining not necessary
+    # probing: "invalid" {obs} episodes are marked as invalid by not attaching any labels
+    # for pretraining del obs[key] would fail
+    if train_mode == 'probe':
+        for e in episode_labels:
+            for obs in e:
+                for key in low_entropy_labels:
+                    del obs[key]
+        # wandb.log(entropy_dict)
     return episode_labels, entropy_dict
 
 # min_val = 100
 # max_val = 0
 # min_k = ""
 # max_k = ""
-def adjustLabelRangeNegative(labels):
+def adjustLabelRangeNegative(labels, env_name):
+    game_name = env_name.split('NoFrameskip-v4')[0]
+    scaling_factor = scalings[game_name]
     for l in labels:
         for i in l:
             for k, val in i.items():
-                if "_v_x" or "_v_y" in k:
+                if ("_v_x" in k) or ("_v_y" in k):
                     # global min_val, min_k, max_val, max_k
                     # if val < min_val:
                     #     min_val = val  
@@ -65,11 +73,16 @@ def adjustLabelRangeNegative(labels):
                     # if val > max_val:
                     #     max_val = val  
                     #     max_k = k
-                    i[k] = int(int(val) * 0.5) + 128
-                assert i[k] > 0
-                assert i[k] < 256
+                    # print(f"key is {k}")
+                    i[k] = int(int(val) * scaling_factor) + 128
+                    # global list_velocities
+                    # list_velocities.append(i[k])
+                assert i[k] >= 0, f"is {i[k]}, val is {val} for key {k}"
+                assert i[k] < 256, f"is {i[k]}, val is {val} for key {k}"
     # print(f"min val {min_val} for key {min_k}")
     # print(f"max val {max_val} for key {max_k}")
+    # velocities = np.asarray(list_velocities)
+    # np.save(os.path.join(Path.home(), "datadump", "velocities.npy"))
     return labels
 
     
