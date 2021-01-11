@@ -74,7 +74,7 @@ def adjustLabelRangeNegative(labels, env_name):
                     #     max_val = val  
                     #     max_k = k
                     # print(f"key is {k}")
-                    i[k] = int(int(val) * scaling_factor) + 128
+                    i[k] = int(val * scaling_factor) + 128
                     # global list_velocities
                     # list_velocities.append(i[k])
                 assert i[k] >= 0, f"is {i[k]}, val is {val} for key {k}"
