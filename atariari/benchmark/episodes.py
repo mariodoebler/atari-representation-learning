@@ -12,7 +12,7 @@ from PIL import Image
 from .envs import make_vec_envs
 from .utils import download_run
 from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRangeNegative
-from benchmarking.utils.helpers import countAndReportSampleNumbers, remove_invalid_episodes
+from benchmarking.utils.helpers import countAndReportSampleNumbers, remove_invalid_episodes, analyzeDebugEpisodes
 try:
     import wandb
 except:
@@ -194,6 +194,9 @@ def get_episodes(env_name,
     episode_labels = [episode_labels[i] for i in ep_inds]
     if train_mode == "probe":
         episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
+    if num_frame_stack == 4:
+        analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
+        sys.exit(0) # successfull termination
     episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
 
     try:
