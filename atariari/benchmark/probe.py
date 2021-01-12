@@ -97,6 +97,9 @@ class ProbeTrainer():
             k: torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizers[k], patience=5, factor=0.2, verbose=True,
                                                           mode='max', min_lr=1e-5) for k in sample_label.keys()}
 
+        print("The deployed labels are:")
+        print([f"{l}" for l in sample_label.keys()])
+
     def generate_batch(self, episodes, episode_labels):
         total_steps = sum([len(e) for e in episodes])
         assert total_steps > self.batch_size

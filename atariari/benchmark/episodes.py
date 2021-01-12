@@ -6,7 +6,7 @@ from collections import deque
 
 import torch
 import numpy as np
-
+from pathlib import Path
 from PIL import Image
 
 from .envs import make_vec_envs
@@ -145,6 +145,73 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
 
     return episodes, episode_labels
 
+def get_checkpoint(env_name, num_frame_stack):
+    game_name = env_name.split("-")[0].split("No")[0].split("Deterministic")[0].lower()
+    file_name_beginning = f"{game_name}_fs{num_frame_stack}"
+    checkpoint_path = f"{Path.home()}/server_results/path_weights/pretrained_impala_agents_benchmark"
+    checkpoint_path_content = [f for f in os.listdir(checkpoint_path) if os.path.isfile(os.path.join(checkpoint_path, f)) and file_name_beginning in f]
+    assert len(checkpoint_path_content) == 1
+    print(f"checkpoint path for {env_name} and fs{num_frame_stack} is: {checkpoint_path_content[0]}")
+    return os.path.join(checkpoint_path, checkpoint_path_content[0])
+
+def get_baseline_rollouts(env_name, steps, seed=42, num_processes=1,
+                     num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, just_use_one_input_dim=True):
+    filepath = get_checkpoint(env_name, num_frame_stack)
+    # filepath = download_run(env_name, checkpoint_step)
+    # while not os.path.exists(filepath):
+    #     time.sleep(5)
+
+    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper)
+
+    actor_critic, ob_rms = torch.load(filepath, map_location=lambda storage, loc: storage)
+
+    episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
+    episode_labels = [[[]] for _ in range(num_processes)]
+    episode_rewards = deque(maxlen=10)
+
+    masks = torch.zeros(1, 1)
+    obs = envs.reset()
+    if just_use_one_input_dim:
+        obs = obs[:, -1, :, :]
+        obs = obs.unsqueeze(1)
+    entropies = []
+    for step in range(steps // num_processes):
+        # Take action using the PPO policy
+        with torch.no_grad():
+            _, action, _, _, actor_features, dist_entropy = actor_critic.act(obs, None, masks, deterministic=False)
+        action = torch.tensor([envs.action_space.sample() if np.random.uniform(0, 1) < 0.2 else action[i]
+                               for i in range(num_processes)]).unsqueeze(dim=1)
+        entropies.append(dist_entropy.clone())
+        obs, reward, done, infos = envs.step(action)
+        if just_use_one_input_dim:
+            obs = obs[:, -1, :, :]
+            obs = obs.unsqueeze(1)
+        for i, info in enumerate(infos):
+            if 'episode' in info.keys():
+                episode_rewards.append(info['episode']['r'])
+
+            if done[i] != 1:
+                episodes[i][-1].append(obs[i].clone())
+                if "labels" in info.keys():
+                    episode_labels[i][-1].append(info["labels"])
+            else:
+                episodes[i].append([obs[i].clone()])
+                if "labels" in info.keys():
+                    episode_labels[i].append([info["labels"]])
+
+    # Convert to 2d list from 3d list
+    episodes = list(chain.from_iterable(episodes))
+    # Convert to 2d list from 3d list
+    episode_labels = list(chain.from_iterable(episode_labels))
+    mean_entropy = torch.stack(entropies).mean()
+    mean_episode_reward = np.mean(episode_rewards)
+    try:
+        wandb.log({'action_entropy': mean_entropy, 'mean_reward': mean_episode_reward})
+    except:
+        pass
+
+    return episodes, episode_labels
+
 
 def get_episodes(env_name,
                  steps,
@@ -169,7 +236,8 @@ def get_episodes(env_name,
                                                              seed=seed,
                                                              num_processes=num_processes,
                                                              num_frame_stack=num_frame_stack,
-                                                             downsample=downsample, color=color ,use_extended_wrapper=use_extended_wrapper)
+                                                             downsample=downsample, color=color,
+                                                             use_extended_wrapper=use_extended_wrapper)
 
     elif collect_mode == "pretrained_ppo":
 
@@ -183,6 +251,15 @@ def get_episodes(env_name,
                                                    color=color,
                                                    checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,just_use_one_input_dim=just_use_one_input_dim)
 
+    elif collect_mode == "pretrained_baseline_impala_agent":
+        episodes, episode_labels = get_baseline_rollouts(env_name=env_name,
+                                                             steps=steps,
+                                                             seed=seed,
+                                                             num_processes=num_processes,
+                                                             num_frame_stack=num_frame_stack,
+                                                             downsample=downsample, color=color,
+                                                             use_extended_wrapper=use_extended_wrapper)
+
 
     else:
         assert False, "Collect mode {} not recognized".format(collect_mode)
@@ -194,9 +271,9 @@ def get_episodes(env_name,
     episode_labels = [episode_labels[i] for i in ep_inds]
     if train_mode == "probe":
         episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
-    if num_frame_stack == 4:
-        analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
-        sys.exit(0) # successfull termination
+    # if num_frame_stack == 4:
+    #     analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
+        # sys.exit(0) # successfull termination
     episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
 
     try:
