@@ -83,6 +83,11 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
     # Convert to 2d list from 3d list
     episode_labels = list(chain.from_iterable(episode_labels))
     envs.close()
+    mean_episode_reward = np.mean(episode_rewards)
+    try:
+        wandb.log({'mean_reward': mean_episode_reward})
+    except:
+        pass
     return episodes, episode_labels
 
 
