@@ -12,7 +12,7 @@ import torch
 from baselines import bench
 from test_atariari.wrapper.atari_wrapper import make_atari, wrap_deepmind
 from .wrapper import AtariARIWrapper
-from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
+# from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
 import errno
 
 def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False, no_offsets=False):
@@ -64,7 +64,7 @@ class ImageToPyTorch(gym.ObservationWrapper):
 
 
 
-def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False, no_offsets=False):
+def make_vec_envs(env_name, seed, num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False, no_offsets=False):
     try:
         Path(log_dir).mkdir(parents=True, exist_ok=True)
     except OSError as exc:

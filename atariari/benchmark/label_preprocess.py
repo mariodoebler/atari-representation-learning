@@ -64,7 +64,7 @@ def adjustLabelRange(labels, env_name, no_offsets=False):
     if no_offsets:
         scaling_factor = scalings[game_name]
     else:
-        scaling_factor = scalings_offset[game_name]
+        scaling_factor = scalings_offsets[game_name]
     for l in labels:
         for i in l:
             for k, val in i.items():
