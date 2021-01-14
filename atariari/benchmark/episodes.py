@@ -11,7 +11,7 @@ from PIL import Image
 
 from .envs import make_vec_envs
 from .utils import download_run
-from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRangeNegative
+from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRange
 from benchmarking.utils.helpers import countAndReportSampleNumbers, remove_invalid_episodes, analyzeDebugEpisodes
 try:
     import wandb
@@ -38,8 +38,8 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
                                   45159936, 46235136, 47310336, 48385536, 49460736, 49999872]
 
 
-def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False):
-    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper)
+def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, no_offsets=False):
+    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
     envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
@@ -87,13 +87,13 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
 
 
 def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
-                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True):
+                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True, no_offsets=False):
     checkpoint_step = checkpointed_steps_full_sorted[checkpoint_index]
     filepath = download_run(env_name, checkpoint_step)
     while not os.path.exists(filepath):
         time.sleep(5)
 
-    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper)
+    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
 
     # filepath = 
     actor_critic, ob_rms = torch.load(filepath, map_location=lambda storage, loc: storage)
@@ -145,23 +145,27 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
 
     return episodes, episode_labels
 
-def get_checkpoint(env_name, num_frame_stack):
+def get_checkpoint(env_name):
     game_name = env_name.split("-")[0].split("No")[0].split("Deterministic")[0].lower()
-    file_name_beginning = f"{game_name}_fs{num_frame_stack}"
+    file_name_beginning = f"{game_name}_fs4"
     checkpoint_path = f"{Path.home()}/server_results/path_weights/pretrained_impala_agents_benchmark"
     checkpoint_path_content = [f for f in os.listdir(checkpoint_path) if os.path.isfile(os.path.join(checkpoint_path, f)) and file_name_beginning in f]
-    assert len(checkpoint_path_content) == 1
-    print(f"checkpoint path for {env_name} and fs{num_frame_stack} is: {checkpoint_path_content[0]}")
+    assert len(checkpoint_path_content) == 1, f"there should be just ONE file starting with {file_name_beginning}, but found more than 1"
+    print(f"checkpoint path for {env_name} is: {checkpoint_path_content[0]}")
     return os.path.join(checkpoint_path, checkpoint_path_content[0])
 
 def get_baseline_rollouts(env_name, steps, seed=42, num_processes=1,
-                     num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, just_use_one_input_dim=True):
-    filepath = get_checkpoint(env_name, num_frame_stack)
+                     num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, just_use_one_input_dim=True, no_offsets=False):
+
+    if (num_frame_stack == 1):
+        assert just_use_one_input_dim, "if fs1 you have to choose just_use_one_input_dim!"
+
+    filepath = get_checkpoint(env_name)
     # filepath = download_run(env_name, checkpoint_step)
     # while not os.path.exists(filepath):
     #     time.sleep(5)
 
-    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper)
+    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
 
     actor_critic, ob_rms = torch.load(filepath, map_location=lambda storage, loc: storage)
 
@@ -227,7 +231,8 @@ def get_episodes(env_name,
                  min_episode_length=64,
                  wandb=None,
                  use_extended_wrapper=False,
-                 just_use_one_input_dim=True):
+                 just_use_one_input_dim=True,
+                 no_offsets=False):
 
     if collect_mode == "random_agent":
         # List of episodes. Each episode is a list of 160x210 observations
@@ -237,7 +242,8 @@ def get_episodes(env_name,
                                                              num_processes=num_processes,
                                                              num_frame_stack=num_frame_stack,
                                                              downsample=downsample, color=color,
-                                                             use_extended_wrapper=use_extended_wrapper)
+                                                             use_extended_wrapper=use_extended_wrapper,
+                                                             no_offsets=no_offsets)
 
     elif collect_mode == "pretrained_ppo":
 
@@ -249,7 +255,9 @@ def get_episodes(env_name,
                                                    num_frame_stack=num_frame_stack,
                                                    downsample=downsample,
                                                    color=color,
-                                                   checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,just_use_one_input_dim=just_use_one_input_dim)
+                                                   checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,
+                                                   just_use_one_input_dim=just_use_one_input_dim,
+                                                   no_offsets=no_offsets)
 
     elif collect_mode == "pretrained_baseline_impala_agent":
         episodes, episode_labels = get_baseline_rollouts(env_name=env_name,
@@ -258,7 +266,8 @@ def get_episodes(env_name,
                                                              num_processes=num_processes,
                                                              num_frame_stack=num_frame_stack,
                                                              downsample=downsample, color=color,
-                                                             use_extended_wrapper=use_extended_wrapper)
+                                                             use_extended_wrapper=use_extended_wrapper,
+                                                             no_offsets=no_offsets)
 
 
     else:
@@ -288,7 +297,8 @@ def get_episodes(env_name,
     print(f"inds shuffled are {*inds,}")
 
     if use_extended_wrapper:
-        episode_labels = adjustLabelRangeNegative(episode_labels, env_name)
+        # scaling depends whether offsets have been subtracted or not!
+        episode_labels = adjustLabelRange(episode_labels, env_name, no_offsets=no_offsets)
 
 
     if train_mode == "train_encoder":

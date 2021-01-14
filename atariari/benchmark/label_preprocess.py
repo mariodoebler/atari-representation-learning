@@ -1,7 +1,7 @@
 from itertools import chain
 import torch
 import wandb
-from benchmarking.utils.process_velocities import scalings
+from benchmarking.utils.process_velocities import scalings, scalings_offsets
 
 
 def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
@@ -59,9 +59,12 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode=
 # max_val = 0
 # min_k = ""
 # max_k = ""
-def adjustLabelRangeNegative(labels, env_name):
+def adjustLabelRange(labels, env_name, no_offsets=False):
     game_name = env_name.split('NoFrameskip-v4')[0]
-    scaling_factor = scalings[game_name]
+    if no_offsets:
+        scaling_factor = scalings[game_name]
+    else:
+        scaling_factor = scalings_offset[game_name]
     for l in labels:
         for i in l:
             for k, val in i.items():
