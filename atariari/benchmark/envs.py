@@ -22,8 +22,8 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
         if is_atari:
-            env = make_atari(env_id)
-            env = AtariARIWrapper(env)
+            env = make_atari(env_id)  # --> check that NoFrameskip-v4-env has been chosen; NoopReset
+            env = AtariARIWrapper(env)  # --> add the labels based on the RAM-state to the info-dict
 
         env.seed(seed + rank)
 
@@ -38,6 +38,10 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
 
         # env = gym.wrappers.Monitor(env, '/home/cathrin/MA/datadump/videos/' + env_id, force=True)
 
+        # --> in the following order:
+        # EpisodicLifeEnv; FireResetEnv, Grayscaling, just for Pong: overlay Scores
+        # ScaleObservations to [0, 1]; ClipRewards; 
+        # for framestacking: MaxAndSkipAndFramestack, without Framstacking: MaxAndSkipEnv
         env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
 
         # convert to pytorch-style (C, H, W)
