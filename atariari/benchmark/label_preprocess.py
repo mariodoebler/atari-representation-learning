@@ -1,3 +1,4 @@
+import sys
 from itertools import chain
 import torch
 import wandb
@@ -53,6 +54,10 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode=
                 for key in low_entropy_labels:
                     del obs[key]
         # wandb.log(entropy_dict)
+    elif "train_encoder":
+        pass
+    else:
+        sys.exit(f"Train mode {train_mode} doesn't exist, abort!")
     return episode_labels, entropy_dict
 
 # min_val = 100
