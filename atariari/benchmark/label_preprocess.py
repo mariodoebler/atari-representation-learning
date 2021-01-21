@@ -1,9 +1,10 @@
 import sys
+import numpy as np
 from itertools import chain
 import torch
 import wandb
 from benchmarking.utils.process_velocities import scalings, scalings_offsets
-
+import matplotlib.pyplot as plt
 
 def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
     """
@@ -41,7 +42,7 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode=
             torch.tensor([x / len(flat_label_list) for x in counts[k].values()])).entropy()
         entropy_dict['entropy_' + k] = entropy
         if entropy < entropy_threshold:
-            print("Deleting {} for being too low in entropy! Sorry, dood!".format(k))
+            print("Deleting {} for being too low in entropy! Sorry, dood! {:2f}".format(k, entropy.item()))
             low_entropy_labels.append(k)
 
     # just necessary to remove specific labels if they're needed for probing
@@ -58,6 +59,9 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode=
         pass
     else:
         sys.exit(f"Train mode {train_mode} doesn't exist, abort!")
+    print("KEPT labels:")
+    for l in episode_labels[0][0].keys():
+        print(f"{l}")
     return episode_labels, entropy_dict
 
 # min_val = 100
