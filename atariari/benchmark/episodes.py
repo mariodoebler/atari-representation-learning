@@ -4,15 +4,21 @@ import time
 from itertools import chain
 from collections import deque
 
-import torch
 import numpy as np
-from pathlib import Path
+
 from PIL import Image
+
+import torch
 
 from .envs import make_vec_envs
 from .utils import download_run
-from .label_preprocess import remove_duplicates, remove_low_entropy_labels, adjustLabelRange
-from benchmarking.utils.helpers import countAndReportSampleNumbers, remove_invalid_episodes, analyzeDebugEpisodes
+from .label_preprocess import (adjustLabelRange, remove_duplicates,
+                               remove_low_entropy_labels)
+
+from benchmarking.utils.helpers import (analyzeDebugEpisodes,
+                                        countAndReportSampleNumbers,
+                                        remove_invalid_episodes)
+
 try:
     import wandb
 except:
@@ -39,13 +45,16 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
 
 
 def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, no_offsets=False):
-    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
+    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample,
+                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
     envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
-    episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
+    # (n_processes * n_episodes * episode_len)
+    episodes = [[[]] for _ in range(num_processes)]
     episode_labels = [[[]] for _ in range(num_processes)]
-    debug_save_frames_for_plotting = True and not torch.cuda.is_available()  # do NOT do this on the server, just for testing on computer
+    # do NOT do this on the server, just for testing on computer
+    debug_save_frames_for_plotting = True and not torch.cuda.is_available()
     if debug_save_frames_for_plotting:
         print(f"frame-set\t\tvel1\t\tvel2")
     for step in range(steps // num_processes):
@@ -53,18 +62,23 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
         action = torch.tensor(
             np.array([np.random.randint(1, envs.action_space.n) for _ in range(num_processes)])) \
             .unsqueeze(dim=1)
-        obs, reward, done, infos = envs.step(action) # obs.shape: [num_processes, num-stacks, height, width]
+        # obs.shape: [num_processes, num-stacks, height, width]
+        obs, reward, done, infos = envs.step(action)
         if debug_save_frames_for_plotting and step < 100:
             # img_obs = envs.render('rgb_array')
             # im = Image.fromarray(img_obs)
             # im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
-            torch.save(obs, f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
+            torch.save(
+                obs, f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
             if 'pong' in env_name.lower() and infos[0].get('labels', None):
-                print(f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
+                print(
+                    f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
             elif 'pacman' in env_name.lower() and infos[0].get('labels', None):
-                print(f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['enemy_sue_v_x']}")
+                print(
+                    f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['enemy_sue_v_x']}")
             elif 'breakout' in env_name.lower() and infos[0].get('labels', None):
-                print(f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
+                print(
+                    f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
@@ -98,12 +112,15 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
     while not os.path.exists(filepath):
         time.sleep(5)
 
-    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
+    envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample,
+                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
 
-    # filepath = 
-    actor_critic, ob_rms = torch.load(filepath, map_location=lambda storage, loc: storage)
+    # filepath =
+    actor_critic, ob_rms = torch.load(
+        filepath, map_location=lambda storage, loc: storage)
 
-    episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
+    # (n_processes * n_episodes * episode_len)
+    episodes = [[[]] for _ in range(num_processes)]
     episode_labels = [[[]] for _ in range(num_processes)]
     episode_rewards = deque(maxlen=10)
 
@@ -116,7 +133,8 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
     for step in range(steps // num_processes):
         # Take action using the PPO policy
         with torch.no_grad():
-            _, action, _, _, actor_features, dist_entropy = actor_critic.act(obs, None, masks, deterministic=False)
+            _, action, _, _, actor_features, dist_entropy = actor_critic.act(
+                obs, None, masks, deterministic=False)
         action = torch.tensor([envs.action_space.sample() if np.random.uniform(0, 1) < 0.2 else action[i]
                                for i in range(num_processes)]).unsqueeze(dim=1)
         entropies.append(dist_entropy.clone())
@@ -144,78 +162,8 @@ def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
     mean_entropy = torch.stack(entropies).mean()
     mean_episode_reward = np.mean(episode_rewards)
     try:
-        wandb.log({'action_entropy': mean_entropy, 'mean_reward': mean_episode_reward})
-    except:
-        pass
-
-    return episodes, episode_labels
-
-def get_checkpoint(env_name):
-    game_name = env_name.split("-")[0].split("No")[0].split("Deterministic")[0].lower()
-    file_name_beginning = f"{game_name}_fs4"
-    checkpoint_path = f"{Path.home()}/server_results/path_weights/pretrained_impala_agents_benchmark"
-    checkpoint_path_content = [f for f in os.listdir(checkpoint_path) if os.path.isfile(os.path.join(checkpoint_path, f)) and file_name_beginning in f]
-    assert len(checkpoint_path_content) == 1, f"there should be just ONE file starting with {file_name_beginning}, but found more than 1"
-    print(f"checkpoint path for {env_name} is: {checkpoint_path_content[0]}")
-    return os.path.join(checkpoint_path, checkpoint_path_content[0])
-
-def get_baseline_rollouts(env_name, steps, seed=42, num_processes=1,
-                     num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, just_use_one_input_dim=True, no_offsets=False):
-
-    if (num_frame_stack == 1):
-        assert just_use_one_input_dim, "if fs1 you have to choose just_use_one_input_dim!"
-
-    filepath = get_checkpoint(env_name)
-    # filepath = download_run(env_name, checkpoint_step)
-    # while not os.path.exists(filepath):
-    #     time.sleep(5)
-
-    envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample, color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
-
-    actor_critic, ob_rms = torch.load(filepath, map_location=lambda storage, loc: storage)
-
-    episodes = [[[]] for _ in range(num_processes)]  # (n_processes * n_episodes * episode_len)
-    episode_labels = [[[]] for _ in range(num_processes)]
-    episode_rewards = deque(maxlen=10)
-
-    masks = torch.zeros(1, 1)
-    obs = envs.reset()
-    if just_use_one_input_dim:
-        obs = obs[:, -1, :, :]
-        obs = obs.unsqueeze(1)
-    entropies = []
-    for step in range(steps // num_processes):
-        # Take action using the PPO policy
-        with torch.no_grad():
-            _, action, _, _, actor_features, dist_entropy = actor_critic.act(obs, None, masks, deterministic=False)
-        action = torch.tensor([envs.action_space.sample() if np.random.uniform(0, 1) < 0.2 else action[i]
-                               for i in range(num_processes)]).unsqueeze(dim=1)
-        entropies.append(dist_entropy.clone())
-        obs, reward, done, infos = envs.step(action)
-        if just_use_one_input_dim:
-            obs = obs[:, -1, :, :]
-            obs = obs.unsqueeze(1)
-        for i, info in enumerate(infos):
-            if 'episode' in info.keys():
-                episode_rewards.append(info['episode']['r'])
-
-            if done[i] != 1:
-                episodes[i][-1].append(obs[i].clone())
-                if "labels" in info.keys():
-                    episode_labels[i][-1].append(info["labels"])
-            else:
-                episodes[i].append([obs[i].clone()])
-                if "labels" in info.keys():
-                    episode_labels[i].append([info["labels"]])
-
-    # Convert to 2d list from 3d list
-    episodes = list(chain.from_iterable(episodes))
-    # Convert to 2d list from 3d list
-    episode_labels = list(chain.from_iterable(episode_labels))
-    mean_entropy = torch.stack(entropies).mean()
-    mean_episode_reward = np.mean(episode_rewards)
-    try:
-        wandb.log({'action_entropy': mean_entropy, 'mean_reward': mean_episode_reward})
+        wandb.log({'action_entropy': mean_entropy,
+                   'mean_reward': mean_episode_reward})
     except:
         pass
 
@@ -254,28 +202,18 @@ def get_episodes(env_name,
 
         # List of episodes. Each episode is a list of 160x210 observations
         episodes, episode_labels = get_ppo_rollouts(env_name=env_name,
-                                                   steps=steps,
-                                                   seed=seed,
-                                                   num_processes=num_processes,
-                                                   num_frame_stack=num_frame_stack,
-                                                   downsample=downsample,
-                                                   color=color,
-                                                   checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,
-                                                   just_use_one_input_dim=just_use_one_input_dim,
-                                                   no_offsets=no_offsets)
-
-    elif collect_mode == "pretrained_baseline_impala_agent":
-        episodes, episode_labels = get_baseline_rollouts(env_name=env_name,
-                                                             steps=steps,
-                                                             seed=seed,
-                                                             num_processes=num_processes,
-                                                             num_frame_stack=num_frame_stack,
-                                                             downsample=downsample, color=color,
-                                                             use_extended_wrapper=use_extended_wrapper,
-                                                             no_offsets=no_offsets)
+                                                  steps=steps,
+                                                  seed=seed,
+                                                  num_processes=num_processes,
+                                                  num_frame_stack=num_frame_stack,
+                                                  downsample=downsample,
+                                                  color=color,
+                                                  checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,
+                                                  just_use_one_input_dim=just_use_one_input_dim,
+                                                  no_offsets=no_offsets)
 
 
-    else:
+   else:
         assert False, "Collect mode {} not recognized".format(collect_mode)
 
     ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
@@ -285,16 +223,15 @@ def get_episodes(env_name,
     episode_labels = [episode_labels[i] for i in ep_inds]
     if train_mode == "probe":
         episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
-    # if num_frame_stack == 4:
-    #     analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
-        # sys.exit(0) # successfull termination
+    if num_frame_stack == 4:
+        analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
+        sys.exit(0)  # successfull termination
     episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
 
     try:
         wandb.log(entropy_dict)
     except:
         pass
-
 
     inds = np.arange(len(episodes))
     rng = np.random.RandomState(seed=seed)
@@ -304,7 +241,6 @@ def get_episodes(env_name,
     if use_extended_wrapper:
         # scaling depends whether offsets have been subtracted or not!
         episode_labels = adjustLabelRange(episode_labels, env_name, no_offsets=no_offsets)
-
 
     if train_mode == "train_encoder":
         assert len(inds) > 1, "Not enough episodes to split into train and val. You must specify enough steps to get at least two episodes"
@@ -318,9 +254,9 @@ def get_episodes(env_name,
         assert val_split_ind > 0 and te_split_ind > val_split_ind,\
             "Not enough episodes to split into train, val and test. You must specify more steps"
         tr_eps, val_eps, test_eps = episodes[:val_split_ind], episodes[val_split_ind:te_split_ind], episodes[
-                                                                                                    te_split_ind:]
+            te_split_ind:]
         tr_labels, val_labels, test_labels = episode_labels[:val_split_ind], \
-                                             episode_labels[val_split_ind:te_split_ind], episode_labels[te_split_ind:]
+        episode_labels[val_split_ind:te_split_ind], episode_labels[te_split_ind:]
         test_eps, test_labels = remove_duplicates(tr_eps, val_eps, test_eps, test_labels)
         test_ep_inds = [i for i in range(len(test_eps)) if len(test_eps[i]) > 1]
         test_eps = [test_eps[i] for i in test_ep_inds]
@@ -330,7 +266,3 @@ def get_episodes(env_name,
 
     if train_mode == "dry_run":
         return episodes, episode_labels
-
-
-
-
