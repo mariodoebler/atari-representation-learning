@@ -110,7 +110,9 @@ class ProbeTrainer():
                                              replacement=True, num_samples=total_steps),
                                self.batch_size, drop_last=True)
 
+        counter = 0
         for indices in sampler:
+            counter += 1
             episodes_batch = [episodes[x] for x in indices]
             episode_labels_batch = [episode_labels[x] for x in indices]
             xs, labels = [], appendabledict()
@@ -123,6 +125,7 @@ class ProbeTrainer():
                 xs.append(x)
                 labels.append_update(episode_labels_batch[ep_ind][t])
             yield torch.stack(xs).float().to(self.device) / 255., labels
+        print(f"yielded {counter} batches")
 
     def probe(self, batch, k):
         probe = self.probes[k]
