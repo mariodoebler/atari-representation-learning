@@ -4,17 +4,15 @@ import time
 from itertools import chain
 from collections import deque
 
-import numpy as np
-
-from PIL import Image
-
 import torch
+import numpy as np
 
 from .envs import make_vec_envs
 from .utils import download_run
 from .label_preprocess import (adjustLabelRange, remove_duplicates,
                                remove_low_entropy_labels)
 
+from PIL import Image
 from benchmarking.utils.helpers import (analyzeDebugEpisodes,
                                         countAndReportSampleNumbers,
                                         remove_invalid_episodes)
@@ -213,7 +211,7 @@ def get_episodes(env_name,
                                                   no_offsets=no_offsets)
 
 
-   else:
+    else:
         assert False, "Collect mode {} not recognized".format(collect_mode)
 
     ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
