@@ -43,9 +43,9 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
                                   45159936, 46235136, 47310336, 48385536, 49460736, 49999872]
 
 
-def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, no_offsets=False):
+def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, no_offsets=False, train_mode="train_encoder"):
     envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample,
-                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
+                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets, train_mode=train_mode)
     envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
@@ -105,14 +105,14 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
 
 
 def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
-                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True, no_offsets=False):
+                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True, no_offsets=False, train_mode="train_encoder"):
     checkpoint_step = checkpointed_steps_full_sorted[checkpoint_index]
     filepath = download_run(env_name, checkpoint_step)
     while not os.path.exists(filepath):
         time.sleep(5)
 
     envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample,
-                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
+                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets, train_mode=train_mode)
 
     # filepath =
     actor_critic, ob_rms = torch.load(
@@ -195,7 +195,8 @@ def get_episodes(env_name,
                                                              num_frame_stack=num_frame_stack,
                                                              downsample=downsample, color=color,
                                                              use_extended_wrapper=use_extended_wrapper,
-                                                             no_offsets=no_offsets)
+                                                             no_offsets=no_offsets,
+                                                             train_mode=train_mode)
 
     elif collect_mode == "pretrained_ppo":
 
@@ -209,7 +210,8 @@ def get_episodes(env_name,
                                                   color=color,
                                                   checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,
                                                   just_use_one_input_dim=just_use_one_input_dim,
-                                                  no_offsets=no_offsets)
+                                                  no_offsets=no_offsets,
+                                                  train_mode=train_mode)
 
 
     else:

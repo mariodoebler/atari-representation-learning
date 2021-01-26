@@ -15,7 +15,7 @@ from .wrapper import AtariARIWrapper
 # from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
 import errno
 
-def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False, no_offsets=False):
+def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False, no_offsets=False, train_mode="train_encoder"):
     def _thunk():
         env = gym.make(env_id)
 
@@ -23,7 +23,12 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
         if is_atari:
             env = make_atari(env_id)  # --> check that NoFrameskip-v4-env has been chosen; NoopReset
-            env = AtariARIWrapper(env)  # --> add the labels based on the RAM-state to the info-dict
+            if train_mode == "probe":
+                env = AtariARIWrapper(env)  # --> add the labels based on the RAM-state to the info-dict
+            elif train_mode == "train_encoder":
+                pass
+            else:
+                raise ValueError
 
         env.seed(seed + rank)
 
@@ -42,7 +47,7 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
         # EpisodicLifeEnv; FireResetEnv, Grayscaling, just for Pong: overlay Scores
         # ScaleObservations to [0, 1]; ClipRewards; 
         # for framestacking: MaxAndSkipAndFramestack, without Framstacking: MaxAndSkipEnv
-        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
+        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets, train_mode=train_mode)
 
         # convert to pytorch-style (C, H, W)
         env = ImageToPyTorch(env)
@@ -68,14 +73,14 @@ class ImageToPyTorch(gym.ObservationWrapper):
 
 
 
-def make_vec_envs(env_name, seed, num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False, no_offsets=False):
+def make_vec_envs(env_name, seed, num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False, no_offsets=False, train_mode="train_encoder"):
     try:
         Path(log_dir).mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         if exc.errno != errno.EEXIST:
             raise
         pass
-    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets)
+    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets, train_mode=train_mode)
             for i in range(num_processes)]
 
     if len(envs) > 1:
