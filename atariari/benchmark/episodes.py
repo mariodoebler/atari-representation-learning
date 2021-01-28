@@ -5,6 +5,7 @@ from itertools import chain
 from collections import deque
 
 from PIL import Image
+from torchvision import transforms
 
 import torch
 import numpy as np
@@ -49,11 +50,15 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
     envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
+    debug_save_frames_for_plotting = True and not torch.cuda.is_available()
+    # just works if num_processes = 1!!!
+    if debug_save_frames_for_plotting and num_processes > 1:
+        num_processes = 1
+        print("Set Num Processes to 1 as otherwise no proper dumping of image-observations possible")
     # (n_processes * n_episodes * episode_len)
     episodes = [[[]] for _ in range(num_processes)]
     episode_labels = [[[]] for _ in range(num_processes)]
     # do NOT do this on the server, just for testing on computer
-    debug_save_frames_for_plotting = True and not torch.cuda.is_available()
     if debug_save_frames_for_plotting:
         print(f"frame-set\t\tvel1\t\tvel2")
     for step in range(steps // num_processes):
@@ -61,11 +66,21 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
         action = torch.tensor(
             np.array([np.random.randint(1, envs.action_space.n) for _ in range(num_processes)])) \
             .unsqueeze(dim=1)
-        # obs.shape: [num_processes, num-stacks, height, width]
+        # obs.shape: [NUM_PROCESSES, num-stacks, height, width]
         obs, reward, done, infos = envs.step(action)
-        if debug_save_frames_for_plotting and step < 100:
+        if debug_save_frames_for_plotting and step < 200:
             # img_obs = envs.render('rgb_array')
             # im = Image.fromarray(img_obs)
+            im_obs = obs.squeeze()
+            if num_frame_stack == 4:
+                im = im_obs[0, :, :]
+                for i in range(1, 4):
+                    # 3, frameestack, height, width
+                    im = torch.cat((im, im_obs[i, :, :]), axis=-1)  # via the last axis --> width
+            elif num_frame_stack == 1:
+                im = im_obs
+            im = transforms.ToPILImage()(im).convert("RGB")
+            im.save(f'/home/cathrin/MA/datadump/trash/{step}.png')
             # im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
             torch.save(
                 obs, f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
