@@ -236,13 +236,13 @@ def get_episodes(env_name,
     episodes = [episodes[i] for i in ep_inds]
     print(f"len episode labels {len(episode_labels)}, ep_inds are {*ep_inds,}")
     print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
-    episode_labels = [episode_labels[i] for i in ep_inds]
     if train_mode == "probe":
         episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
+        episode_labels = [episode_labels[i] for i in ep_inds]
     # if num_frame_stack == 4:
     #     analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
     #     sys.exit(0)  # successfull termination
-    episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
+        episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
 
     try:
         wandb.log(entropy_dict)
@@ -254,7 +254,7 @@ def get_episodes(env_name,
     rng.shuffle(inds)
     print(f"inds shuffled are {*inds,}")
 
-    if use_extended_wrapper:
+    if use_extended_wrapper and train_mode == "probe":
         # scaling depends whether offsets have been subtracted or not!
         episode_labels = adjustLabelRange(episode_labels, env_name, no_offsets=no_offsets)
 
