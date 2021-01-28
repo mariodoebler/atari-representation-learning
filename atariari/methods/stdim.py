@@ -79,7 +79,7 @@ class InfoNCESpatioTemporalTrainer(Trainer):
             for y in range(sy):
                 for x in range(sx):
                     # shape [B, 128]
-                    predictions = self.classifier1(f_t)
+                    predictions = self.classifier1(f_t) # "MLP in paper"
                     # shape [B, 128] --> SPATIAL (slice) location of the feature map 
                     positive = f_t_prev[:, y, x, :]
                     # shape [B, B]
