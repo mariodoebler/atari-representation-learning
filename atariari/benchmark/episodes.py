@@ -199,7 +199,8 @@ def get_episodes(env_name,
                  wandb=None,
                  use_extended_wrapper=False,
                  just_use_one_input_dim=True,
-                 no_offsets=False):
+                 no_offsets=False,
+                 collect_for_curl=False): # curl: do not split into train/val
 
     if collect_mode == "random_agent":
         # List of episodes. Each episode is a list of 160x210 observations
@@ -259,6 +260,8 @@ def get_episodes(env_name,
         episode_labels = adjustLabelRange(episode_labels, env_name, no_offsets=no_offsets)
 
     if train_mode == "train_encoder":
+        if collect_for_curl:
+            return episodes
         assert len(inds) > 1, "Not enough episodes to split into train and val. You must specify enough steps to get at least two episodes"
         split_ind = int(0.8 * len(inds))
         tr_eps, val_eps = episodes[:split_ind], episodes[split_ind:]
