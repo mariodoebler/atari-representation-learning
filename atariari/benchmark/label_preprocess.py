@@ -53,7 +53,8 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode=
         for e in episode_labels:
             for obs in e:
                 for key in low_entropy_labels:
-                    del obs[key]
+                    if key in obs:
+                        del obs[key]
         # wandb.log(entropy_dict)
     elif "train_encoder":
         pass
