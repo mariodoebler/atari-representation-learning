@@ -3,7 +3,8 @@ import numpy as np
 from itertools import chain
 import torch
 import wandb
-from benchmarking.utils.process_velocities import scalings, scalings_offsets
+from test_atariari.utils.atari_offset_dict import getOffsetDict
+from benchmarking.utils.process_velocities import scalings
 import matplotlib.pyplot as plt
 
 def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
@@ -69,12 +70,9 @@ def remove_low_entropy_labels(episode_labels, entropy_threshold=0.3, train_mode=
 # max_val = 0
 # min_k = ""
 # max_k = ""
-def adjustLabelRange(labels, env_name, no_offsets=False):
+def scaleLabels(labels, env_name):
     game_name = env_name.split('NoFrameskip-v4')[0]
-    if no_offsets:
-        scaling_factor = scalings[game_name]
-    else:
-        scaling_factor = scalings_offsets[game_name]
+    scaling_factor = scalings[game_name]
     for l in labels:
         for i in l:
             for k, val in i.items():
@@ -98,4 +96,23 @@ def adjustLabelRange(labels, env_name, no_offsets=False):
     # np.save(os.path.join(Path.home(), "datadump", "velocities.npy"))
     return labels
 
-    
+def subtractOffsetsLabels(labels, env_name):
+    game_name = env_name.split('NoFrameskip-v4')[0]
+    offsets = getOffsetDict(game_name)
+    for i, label_one_episode in enumerate(labels):
+        for j, label in enumerate(label_one_episode):
+            for k, value_of_key_of_label in label.items():
+                # NO offsets for velocities as they're relative to the positions!!!
+                # if ("_v_x" in k) or ("_v_y" in k):
+                #     key_to_look_for = "_".join(k.split("_")[::2])
+                #     offset_for_specific_key = self.offset[key_to_look_for]
+                if ("_v_x" in k) or ("_v_y" in k):
+                    offset_for_specific_key = 0
+                elif ("_x" in k) or ("_y" in k):
+                    offset_for_specific_key = offsets[k]
+                else:
+                    offset_for_specific_key = 0
+                labels[i][j][k] = value_of_key_of_label - offset_for_specific_key
+
+    return labels
+

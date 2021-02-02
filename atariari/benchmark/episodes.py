@@ -1,6 +1,7 @@
 import os
 import time
 
+import pickle
 from itertools import chain
 from collections import deque
 
@@ -12,7 +13,7 @@ import numpy as np
 
 from .envs import make_vec_envs
 from .utils import download_run
-from .label_preprocess import (adjustLabelRange, remove_duplicates,
+from .label_preprocess import (scaleLabels, subtractOffsetsLabels, remove_duplicates,
                                remove_low_entropy_labels)
 
 from benchmarking.utils.helpers import (analyzeDebugEpisodes,
@@ -44,9 +45,9 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
                                   45159936, 46235136, 47310336, 48385536, 49460736, 49999872]
 
 
-def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, no_offsets=False, train_mode="train_encoder"):
+def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, train_mode="train_encoder"):
     envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample,
-                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets, train_mode=train_mode)
+                         color, use_extended_wrapper=use_extended_wrapper, train_mode=train_mode)
     envs.reset()
     episode_rewards = deque(maxlen=10)
     print('-------Collecting samples----------')
@@ -84,15 +85,16 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
             # im.save(f'/home/cathrin/MA/datadump/img_obs_{step}.png')
             torch.save(
                 obs, f"/home/cathrin/MA/datadump/observations/obs_{step}.pt")
-            if 'pong' in env_name.lower() and infos[0].get('labels', None):
-                print(
-                    f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
-            elif 'pacman' in env_name.lower() and infos[0].get('labels', None):
-                print(
-                    f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['enemy_sue_v_x']}")
-            elif 'breakout' in env_name.lower() and infos[0].get('labels', None):
-                print(
-                    f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
+            if use_extended_wrapper:
+                if 'pong' in env_name.lower() and infos[0].get('labels', None):
+                    print(
+                        f"{step}\t\t\t{infos[0]['labels']['ball_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
+                elif 'pacman' in env_name.lower() and infos[0].get('labels', None):
+                    print(
+                        f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['enemy_sue_v_x']}")
+                elif 'breakout' in env_name.lower() and infos[0].get('labels', None):
+                    print(
+                        f"{step}\t\t\t{infos[0]['labels']['player_v_x']}\t\t\t{infos[0]['labels']['ball_v_y']}")
         for i, info in enumerate(infos):
             if 'episode' in info.keys():
                 episode_rewards.append(info['episode']['r'])
@@ -118,16 +120,53 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
         pass
     return episodes, episode_labels
 
+def get_filepath_dataset(dataset_path, env_name):
+    files = os.listdir(dataset_path)
+    pkl_files = [f for f in files if f.endswith("_processed.pkl")]
+    filepath = [os.path.join(dataset_path, f) for f in pkl_files if env_name.lower() in f.lower()]
+    assert len(filepath) == 1, f"there is more than 1 processed.pkl file for the game {env_name}!"
+    print(f"Filepath for game {env_name} is: {filepath[0]}")
+    return filepath[0]
+
+
+
+def get_preprocessed_benchmark_dataset(env_name, steps):
+    gpu = torch.cuda.is_available()
+    if gpu:
+        dataset_path = '/data/private/atari_datasets/preprocessed_datasets/'
+    else:
+        # cpu / prototyping laptop
+        dataset_path = '/home/cathrin/MA/datadump/dev_dataset_benchmark/breakout/'
+
+    filepath_dataset = get_filepath_dataset(dataset_path, env_name)
+    with open(filepath_dataset, 'rb') as f:
+        data = pickle.load(f)
+    print(f"loaded data via pickle")
+    tr_labels, val_labels, test_labels = data["training_labels"], data["validation_labels"], data["test_labels"]
+    verify_amount_steps(tr_labels, val_labels, test_labels, steps_wanted=steps, debugging=not gpu)
+    return data["training_episodes"], data["validation_episodes"], data["test_episodes"], tr_labels, val_labels, test_labels
+
+def verify_amount_steps(tr, val, test, steps_wanted, debugging):
+    amount_steps_tr = [len(e) for e in tr]
+    amount_steps_val = [len(e) for e in val]
+    amount_steps_test = [len(e) for e in test]
+
+    total_amount_steps = sum(amount_steps_tr) + sum(amount_steps_val) + sum(amount_steps_test)
+    if debugging: # just inform
+        print(f"Required {steps_wanted}, found {total_amount_steps}")
+    else:
+        assert total_amount_steps == steps_wanted, f"Required {steps_wanted} but just {total_amount_steps} loaded!"
+    
 
 def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
-                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True, no_offsets=False, train_mode="train_encoder"):
+                     num_frame_stack=1, downsample=False, color=False, checkpoint_index=-1, use_extended_wrapper=False, just_use_one_input_dim=True, train_mode="train_encoder"):
     checkpoint_step = checkpointed_steps_full_sorted[checkpoint_index]
     filepath = download_run(env_name, checkpoint_step)
     while not os.path.exists(filepath):
         time.sleep(5)
 
     envs = make_vec_envs(env_name, seed,  num_processes, num_frame_stack, downsample,
-                         color, use_extended_wrapper=use_extended_wrapper, no_offsets=no_offsets, train_mode=train_mode)
+                         color, use_extended_wrapper=use_extended_wrapper, train_mode=train_mode)
 
     # filepath =
     actor_critic, ob_rms = torch.load(
@@ -211,8 +250,19 @@ def get_episodes(env_name,
                                                              num_frame_stack=num_frame_stack,
                                                              downsample=downsample, color=color,
                                                              use_extended_wrapper=use_extended_wrapper,
-                                                             no_offsets=no_offsets,
+                                                            #  no_offsets=no_offsets,
                                                              train_mode=train_mode)
+
+    elif collect_mode == "preprocessed_benchmark_dataset":
+        tr_eps, val_eps, test_eps, tr_labels, val_labels, test_labels = get_preprocessed_benchmark_dataset(env_name=env_name,
+                                                             steps=steps)
+                                                            #  seed=seed,
+                                                            #  num_processes=num_processes,
+                                                            #  num_frame_stack=num_frame_stack,
+                                                            #  downsample=downsample, color=color,
+                                                            #  use_extended_wrapper=use_extended_wrapper,
+                                                            #  no_offsets=no_offsets,
+                                                            #  train_mode=train_mode)
 
     elif collect_mode == "pretrained_ppo":
 
@@ -226,38 +276,54 @@ def get_episodes(env_name,
                                                   color=color,
                                                   checkpoint_index=checkpoint_index, use_extended_wrapper=use_extended_wrapper,
                                                   just_use_one_input_dim=just_use_one_input_dim,
-                                                  no_offsets=no_offsets,
+                                                #   no_offsets=no_offsets,
                                                   train_mode=train_mode)
 
 
     else:
         assert False, "Collect mode {} not recognized".format(collect_mode)
 
-    ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
-    episodes = [episodes[i] for i in ep_inds]
-    print(f"len episode labels {len(episode_labels)}, ep_inds are {*ep_inds,}")
-    print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
-    if train_mode == "probe":
-        episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
-        episode_labels = [episode_labels[i] for i in ep_inds]
-    # if num_frame_stack == 4:
-    #     analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
-    #     sys.exit(0)  # successfull termination
-        episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
+    if collect_mode != "preprocessed_benchmark_dataset":
+        ep_inds = [i for i in range(len(episodes)) if len(episodes[i]) > min_episode_length]
+        episodes = [episodes[i] for i in ep_inds]
+        print(f"len episode labels {len(episode_labels)}, ep_inds are {*ep_inds,}")
+        print(f"len episodes: {len(episodes)} min length: {min_episode_length}")
+        if train_mode == "probe":
+            episodes, episode_labels = remove_invalid_episodes(episodes, episode_labels, frame_stack=num_frame_stack, wandb=wandb)
+            episode_labels = [episode_labels[i] for i in ep_inds]
+        # if num_frame_stack == 4:
+        #     analyzeDebugEpisodes(episodes, batch_size=min_episode_length, env_name=env_name.lower())
+        #     sys.exit(0)  # successfull termination
+            episode_labels, entropy_dict = remove_low_entropy_labels(episode_labels, entropy_threshold=entropy_threshold, train_mode=train_mode)
 
-    try:
-        wandb.log(entropy_dict)
-    except:
-        pass
+        try:
+            wandb.log(entropy_dict)
+        except:
+            pass
 
-    inds = np.arange(len(episodes))
-    rng = np.random.RandomState(seed=seed)
-    rng.shuffle(inds)
-    print(f"inds shuffled are {*inds,}")
+        inds = np.arange(len(episodes))
+        rng = np.random.RandomState(seed=seed)
+        rng.shuffle(inds)
+        print(f"inds shuffled are {*inds,}")
 
-    if use_extended_wrapper and train_mode == "probe":
+    # important: FIRST subtract offsets, then SCALE! 
+    if not no_offsets and train_mode == "probe" and "spaceinvaders" not in env_name.lower():
+        if collect_mode == "preprocessed_benchmark_dataset":
+            tr_labels = subtractOffsetsLabels(tr_labels, env_name)
+            val_labels = subtractOffsetsLabels(val_labels, env_name)
+            test_labels = subtractOffsetsLabels(test_labels, env_name)
+        else:
+            episode_labels = subtractOffsetsLabels(episode_labels, env_name)
+
+    if (use_extended_wrapper and train_mode == "probe"): 
         # scaling depends whether offsets have been subtracted or not!
-        episode_labels = adjustLabelRange(episode_labels, env_name, no_offsets=no_offsets)
+        if collect_mode == "preprocessed_benchmark_dataset":
+            tr_labels = scaleLabels(tr_labels, env_name)
+            val_labels = scaleLabels(val_labels, env_name)
+            test_labels = scaleLabels(test_labels, env_name)
+        else:
+            episode_labels = scaleLabels(episode_labels, env_name)
+
 
     if train_mode == "train_encoder":
         if collect_for_curl:
@@ -269,18 +335,19 @@ def get_episodes(env_name,
         return tr_eps, val_eps
 
     if train_mode == "probe":
-        val_split_ind, te_split_ind = int(0.7 * len(inds)), int(0.8 * len(inds))
-        assert val_split_ind > 0 and te_split_ind > val_split_ind,\
-            "Not enough episodes to split into train, val and test. You must specify more steps"
-        tr_eps, val_eps, test_eps = episodes[:val_split_ind], episodes[val_split_ind:te_split_ind], episodes[
-            te_split_ind:]
-        tr_labels, val_labels, test_labels = episode_labels[:val_split_ind], \
-        episode_labels[val_split_ind:te_split_ind], episode_labels[te_split_ind:]
-        test_eps, test_labels = remove_duplicates(tr_eps, val_eps, test_eps, test_labels)
-        test_ep_inds = [i for i in range(len(test_eps)) if len(test_eps[i]) > 1]
-        test_eps = [test_eps[i] for i in test_ep_inds]
-        test_labels = [test_labels[i] for i in test_ep_inds]
-        countAndReportSampleNumbers(training=tr_labels, validation=val_labels, test=test_labels, wandb=wandb)
+        if not collect_mode == "preprocessed_benchmark_dataset":
+            val_split_ind, te_split_ind = int(0.7 * len(inds)), int(0.8 * len(inds))
+            assert val_split_ind > 0 and te_split_ind > val_split_ind,\
+                "Not enough episodes to split into train, val and test. You must specify more steps"
+            tr_eps, val_eps, test_eps = episodes[:val_split_ind], episodes[val_split_ind:te_split_ind], episodes[
+                te_split_ind:]
+            tr_labels, val_labels, test_labels = episode_labels[:val_split_ind], \
+            episode_labels[val_split_ind:te_split_ind], episode_labels[te_split_ind:]
+            test_eps, test_labels = remove_duplicates(tr_eps, val_eps, test_eps, test_labels)
+            test_ep_inds = [i for i in range(len(test_eps)) if len(test_eps[i]) > 1]
+            test_eps = [test_eps[i] for i in test_ep_inds]
+            test_labels = [test_labels[i] for i in test_ep_inds]
+            countAndReportSampleNumbers(training=tr_labels, validation=val_labels, test=test_labels, wandb=wandb)
         return tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels
 
     if train_mode == "dry_run":
