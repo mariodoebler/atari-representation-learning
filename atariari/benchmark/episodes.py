@@ -133,7 +133,7 @@ def get_filepath_dataset(dataset_path, env_name):
 def get_preprocessed_benchmark_dataset(env_name, steps):
     gpu = torch.cuda.is_available()
     if gpu:
-        dataset_path = '/data/private/atari_datasets/preprocessed_datasets/'
+        dataset_path = '/data/private/atari_datasets/processed_pretrained_datasets/'
     else:
         # cpu / prototyping laptop
         dataset_path = '/home/cathrin/MA/datadump/dev_dataset_benchmark/breakout/'
