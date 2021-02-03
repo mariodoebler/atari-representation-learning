@@ -112,7 +112,13 @@ def subtractOffsetsLabels(labels, env_name):
                     offset_for_specific_key = offsets[k]
                 else:
                     offset_for_specific_key = 0
-                labels[i][j][k] = value_of_key_of_label - offset_for_specific_key
+                
+                offset_corrected_value = value_of_key_of_label - offset_for_specific_key
+                if "_x" in k and "_v_x" not in k:  # just y POSITION
+                    offset_corrected_value = np.clip(offset_corrected_value, 0, 160)
+                elif "_y" in k and "_v_y" not in k:  # just y POSITION
+                    offset_corrected_value = np.clip(offset_corrected_value, 0, 210)
+                labels[i][j][k] = offset_corrected_value
 
     return labels
 
