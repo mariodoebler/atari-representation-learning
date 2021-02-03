@@ -152,10 +152,10 @@ def verify_amount_steps(tr, val, test, steps_wanted, debugging):
     amount_steps_test = [len(e) for e in test]
 
     total_amount_steps = sum(amount_steps_tr) + sum(amount_steps_val) + sum(amount_steps_test)
-    if debugging: # just inform
-        print(f"Required {steps_wanted}, found {total_amount_steps}")
-    else:
-        assert total_amount_steps == steps_wanted, f"Required {steps_wanted} but just {total_amount_steps} loaded!"
+    print(f"Required {steps_wanted}, found {total_amount_steps}")
+    if not debugging:
+        assert total_amount_steps >= steps_wanted, f"Required {steps_wanted} but just {total_amount_steps} loaded!"
+        assert total_amount_steps < steps_wanted + 3000  # not possible to get exactly 50k...
     
 
 def get_ppo_rollouts(env_name, steps, seed=42, num_processes=1,
