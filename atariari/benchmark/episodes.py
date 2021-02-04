@@ -15,7 +15,7 @@ from .envs import make_vec_envs
 from .utils import download_run
 from .label_preprocess import (scaleLabels, subtractOffsetsLabels, remove_duplicates,
                                remove_low_entropy_labels)
-
+from benchmarking.utils.process_dataset import convertDataType
 from benchmarking.utils.helpers import (analyzeDebugEpisodes,
                                         countAndReportSampleNumbers,
                                         remove_invalid_episodes)
@@ -144,7 +144,11 @@ def get_preprocessed_benchmark_dataset(env_name, steps):
     print(f"loaded data via pickle")
     tr_labels, val_labels, test_labels = data["training_labels"], data["validation_labels"], data["test_labels"]
     verify_amount_steps(tr_labels, val_labels, test_labels, steps_wanted=steps, debugging=not gpu)
-    return data["training_episodes"], data["validation_episodes"], data["test_episodes"], tr_labels, val_labels, test_labels
+    tr_eps, val_eps, test_eps = data["training_episodes"], data["validation_episodes"], data["test_episodes"]
+    tr_eps = convertDataType(tr_eps, torch.float32)
+    val_eps = convertDataType(val_eps, torch.float32)
+    test_eps = convertDataType(test_eps, torch.float32)
+    return tr_eps, val_eps, test_eps, tr_labels, val_labels, test_labels
 
 def verify_amount_steps(tr, val, test, steps_wanted, debugging):
     amount_steps_tr = [len(e) for e in tr]
