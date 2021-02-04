@@ -138,6 +138,8 @@ def get_preprocessed_benchmark_dataset(env_name, steps):
         # cpu / prototyping laptop
         dataset_path = '/home/cathrin/MA/datadump/dev_dataset_benchmark/breakout/'
 
+    print(f"Dataset path for the *processed.pkl is {dataset_path}")
+
     filepath_dataset = get_filepath_dataset(dataset_path, env_name)
     with open(filepath_dataset, 'rb') as f:
         data = pickle.load(f)
