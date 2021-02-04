@@ -15,6 +15,7 @@ def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
     flat_val = list(chain.from_iterable(val_eps))
     tr_val_set = set([x.numpy().tostring() for x in flat_tr] + [x.numpy().tostring() for x in flat_val])
     flat_test = list(chain.from_iterable(test_eps))
+    print("Start Duplicate Removal in Test-Set")
 
     for i, episode in enumerate(test_eps[:]):
         test_labels[i] = [label for obs, label in zip(test_eps[i], test_labels[i]) if obs.numpy().tostring() not in tr_val_set]
@@ -114,7 +115,7 @@ def subtractOffsetsLabels(labels, env_name):
                     offset_for_specific_key = 0
                 
                 offset_corrected_value = value_of_key_of_label - offset_for_specific_key
-                if "_x" in k and "_v_x" not in k:  # just y POSITION
+                if "_x" in k and "_v_x" not in k:  # just x POSITION
                     offset_corrected_value = np.clip(offset_corrected_value, 0, 160)
                 elif "_y" in k and "_v_y" not in k:  # just y POSITION
                     offset_corrected_value = np.clip(offset_corrected_value, 0, 210)
