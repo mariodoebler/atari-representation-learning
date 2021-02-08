@@ -273,13 +273,14 @@ class ProbeTrainer():
         else:
             regression_keys_ext = []
         regression_keys_list = list(set(regression_keys + regression_keys_ext))
+        # regression_keys: ALL possible (from ALL games)
         acc_dict, f1_dict, mae_regression_dict = self.do_test_epoch(
             test_episodes, test_label_dicts, regression_keys=regression_keys_list)
 
         # for regression-metrics-comparison
-        wanted_keys = list(set(list(summary_key_dict_extended.keys()) + ["across_categories_avg", "overall_avg"]))
+        wanted_categories = list(set(list(summary_key_dict_extended.keys()) + ["across_categories_avg", "overall_avg"]))
         acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, metrics_per_category_dict, table_test = postprocess_raw_metrics(
-            acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_keys=wanted_keys)
+            acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_categories=wanted_categories, regression_keys_list=regression_keys_list)
         print("""In our paper, we report F1 scores and accuracies averaged across each category. 
               That is, we take a mean across all state variables in a category to get the average score for that category.
               Then we average all the category averages to get the final score that we report per game for each method. 
@@ -297,7 +298,7 @@ class ProbeTrainer():
             print("\t --")
 
 
-def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper, wanted_keys: List[str] = []) -> Union[dict, dict, dict, dict, dict]:
+def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper, wanted_categories: List[str] = [], regression_keys_list: List[str]=[]) -> Union[dict, dict, dict, dict, dict]:
     mae_f1_dict = combineMAEF1Dicts(mae_regression_dict, f1_dict)
     acc_overall_avg, f1_overall_avg, mae_regression_overall_avg, mae_f1_overall_avg = compute_dict_average(acc_dict), \
         compute_dict_average(f1_dict), \
@@ -328,7 +329,7 @@ def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended
     mae_regression_dict["across_categories_avg"], mae_f1_dict["across_categories_avg"] = \
         [mae_regression_avg_across_categories, mae_f1_avg_across_categories]
 
-    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=wanted_keys, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
+    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=regression_keys_list, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
     table_test = createTableList(f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
     
     acc_dict = append_suffix(acc_dict, "_acc")
