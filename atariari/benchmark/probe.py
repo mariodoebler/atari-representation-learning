@@ -1,5 +1,6 @@
 from copy import deepcopy
 from typing import List, Union
+
 import numpy as np
 
 import torch
@@ -13,7 +14,10 @@ from .categorization import regression_keys, summary_key_dict
 from torch import nn
 from torch.utils.data import BatchSampler, RandomSampler
 
-from benchmarking.utils.helpers import calculate_mae_regression_score, calculate_top11_regression_score, combineMetricsPerCategory, createTableList
+from benchmarking.utils.helpers import (calculate_mae_regression_score,
+                                        calculate_top11_regression_score,
+                                        combineMetricsPerCategory,
+                                        createTableList)
 from benchmarking.utils.categorization_extended import (regression_keys_extended,
                                                         summary_key_dict_extended)
 
@@ -280,7 +284,8 @@ class ProbeTrainer():
             test_episodes, test_label_dicts, regression_keys=regression_keys_list)
 
         # for regression-metrics-comparison
-        wanted_categories = list(set(list(summary_key_dict_extended.keys()) + ["across_categories_avg", "overall_avg"]))
+        wanted_categories = list(set(list(
+            summary_key_dict_extended.keys()) + ["across_categories_avg", "overall_avg"]))
         acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict, metrics_per_category_dict, table_test = postprocess_raw_metrics(
             acc_dict, f1_dict, mae_regression_dict, top11_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_categories=wanted_categories, regression_keys_list=regression_keys_list)
         print("""In our paper, we report F1 scores and accuracies averaged across each category. 
@@ -289,8 +294,19 @@ class ProbeTrainer():
               These scores are called \'across_categories_avg_acc\' and \'across_categories_avg_f1\' respectively
               We do this to prevent categories with large number of state variables dominating the mean F1 score.
               """)
-        self.log_results("Test", acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict)
+
+        acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict = self.roundResults(
+            acc_dict=acc_dict, f1_dict=f1_dict, mae_regression_dict=mae_regression_dict, mae_f1_dict=mae_f1_dict, top11_regression_dict=top11_regression_dict, top11_f1_dict=top11_f1_dict)
+        self.log_results("Test", acc_dict, f1_dict, mae_regression_dict,
+                         mae_f1_dict, top11_regression_dict, top11_f1_dict)
         return acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict, metrics_per_category_dict, table_test
+
+    def roundResults(self, **kwargs):
+        metrics = []
+        for metric in kwargs:
+            metric = {k: np.round(v, 4) for k, v in kwargs[metric].items()}
+            metrics.append(deepcopy(metric))
+        return metrics
 
     def log_results(self, epoch_idx, *dictionaries):
         print("Epoch: {}".format(epoch_idx))
@@ -300,9 +316,11 @@ class ProbeTrainer():
             print("\t --")
 
 
-def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, top11_regression_dict, use_extended_wrapper, wanted_categories: List[str] = [], regression_keys_list: List[str]=[]) -> Union[dict, dict, dict, dict, dict]:
-    mae_f1_dict = combineRegressionAndF1Dicts(regression_dict=mae_regression_dict, f1_dict=f1_dict)
-    top11_f1_dict = combineRegressionAndF1Dicts(regression_dict=top11_regression_dict, f1_dict=f1_dict)
+def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, top11_regression_dict, use_extended_wrapper, wanted_categories: List[str] = [], regression_keys_list: List[str] = []) -> Union[dict, dict, dict, dict, dict]:
+    mae_f1_dict = combineRegressionAndF1Dicts(
+        regression_dict=mae_regression_dict, f1_dict=f1_dict)
+    top11_f1_dict = combineRegressionAndF1Dicts(
+        regression_dict=top11_regression_dict, f1_dict=f1_dict)
 
     acc_overall_avg, f1_overall_avg, mae_regression_overall_avg, mae_f1_overall_avg, top11_regression_overall_avg, top11_f1_overall_avg = compute_dict_average(acc_dict), \
         compute_dict_average(f1_dict), \
@@ -343,15 +361,18 @@ def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, top11_regres
     top11_regression_dict["across_categories_avg"], top11_f1_dict["across_categories_avg"] = \
         [top11_regression_avg_across_categories, top11_f1_avg_across_categories]
 
-    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=regression_keys_list, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
+    compare_metrics_per_category_dict = combineMetricsPerCategory(
+        wanted_regression_keys=regression_keys_list, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
     # compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=regression_keys_list, f1=f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
-    table_test = createTableList(f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict, top_11=top11_regression_dict, top11_f1=top11_f1_dict)
-    
+    table_test = createTableList(f1=f1_dict, mae=mae_regression_dict,
+                                 mae_f1=mae_f1_dict, top_11=top11_regression_dict, top11_f1=top11_f1_dict)
+
     acc_dict = append_suffix(acc_dict, "_acc")
     f1_dict = append_suffix(f1_dict, "_f1")
     mae_regression_dict = append_suffix(mae_regression_dict, "_mae_regression")
     mae_f1_dict = append_suffix(mae_f1_dict, "_mae_f1")
-    top11_regression_dict = append_suffix(top11_regression_dict, "_top11_regression")
+    top11_regression_dict = append_suffix(
+        top11_regression_dict, "_top11_regression")
     top11_f1_dict = append_suffix(top11_f1_dict, "_top11_f1")
 
     return acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict, compare_metrics_per_category_dict, table_test
@@ -373,7 +394,8 @@ def compute_category_avgs(metric_dict, use_extended_wrapper):
     for category_name, category_keys in summary_key_dictionary.items():
         category_values = [
             v for k, v in metric_dict.items() if k in category_keys]
-        category_values_names = [k for k, v in metric_dict.items() if k in category_keys]
+        category_values_names = [
+            k for k, v in metric_dict.items() if k in category_keys]
         if len(category_values) < 1:
             continue
         category_mean = np.mean(category_values)
