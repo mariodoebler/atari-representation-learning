@@ -362,7 +362,7 @@ def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, top11_regres
         [top11_regression_avg_across_categories, top11_f1_avg_across_categories]
 
     compare_metrics_per_category_dict = combineMetricsPerCategory(
-        wanted_regression_keys=regression_keys_list, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
+        wanted_categories_keys=wanted_categories, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
     # compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=regression_keys_list, f1=f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
     table_test = createTableList(f1=f1_dict, mae=mae_regression_dict,
                                  mae_f1=mae_f1_dict, top_11=top11_regression_dict, top11_f1=top11_f1_dict)
