@@ -290,9 +290,10 @@ class EarlyStopping(object):
             print(
                 f'Validation accuracy increased for {self.name}  ({self.val_acc_max:.6f} --> {val_acc:.6f}).  Saving model ...')
 
-        save_dir = self.wandb.run.dir
-        torch.save(model.state_dict(), save_dir + "/" + self.name + ".pt")
-        self.val_acc_max = val_acc
+        if self.wandb:
+            save_dir = self.wandb.run.dir
+            torch.save(model.state_dict(), save_dir + "/" + self.name + ".pt")
+            self.val_acc_max = val_acc
 
 
 class Cutout(object):
