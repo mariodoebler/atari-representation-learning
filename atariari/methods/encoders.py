@@ -103,6 +103,7 @@ class NatureCNN(nn.Module):
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu
         self.args = args
+        self.input_110_84 = args.get("input_110_84", False)
         init_ = lambda m: init(m,
                                nn.init.orthogonal_,
                                lambda x: nn.init.constant_(x, 0),
@@ -124,8 +125,12 @@ class NatureCNN(nn.Module):
                 #nn.ReLU()
             )
         else:
-            self.final_conv_size = 64 * 9 * 6
-            self.final_conv_shape = (64, 9, 6)
+            if self.input_110_84:
+                self.final_conv_shape = (64, 3, 1)
+                self.final_conv_size = 64 * 3 * 1
+            else:
+                self.final_conv_size = 64 * 9 * 6
+                self.final_conv_shape = (64, 9, 6)
             self.main = nn.Sequential(
                 init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
                 nn.ReLU(),
