@@ -22,8 +22,12 @@ def get_argparser():
                         help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
     parser.add_argument('--num-frame-stack', type=int, default=1,
                         help='Number of frames to stack for a state')
-    parser.add_argument('--no-downsample', action='store_true', default=True,
-                        help='Whether to use a linear classifier')
+    parser.add_argument('--downsample', action='store_true',
+                        help='Whether to downsample to 84x84 instead of using 210x160')
+    # parser.add_argument('--is_debug', default=False, type=lambda x: (str(x).lower() == 'true'))
+    # parser.add_argument('--no-downsample', dest='nodownsample', action='store_false', default='True',
+    # help='Whether to use a linear classifier')
+    # parser.set_defaults(nodownsample=True)  # default is 210, 160
     parser.add_argument('--pretraining-steps', type=int, default=120000,
                         help='Number of steps to pretrain representations (default from paper: 100000) \
                         was increased to 120k to have 100k of pretraining-steps which are just for the TRAINING \
