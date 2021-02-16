@@ -69,7 +69,7 @@ def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_fra
             .unsqueeze(dim=1)
         # obs.shape: [NUM_PROCESSES, num-stacks, height, width]
         obs, reward, done, infos = envs.step(action)
-        if debug_save_frames_for_plotting and step < 200:
+        if debug_save_frames_for_plotting and step < 200 and os.path.exists('/home/cathrin/MA/datadump/'):
             # img_obs = envs.render('rgb_array')
             # im = Image.fromarray(img_obs)
             im_obs = obs.squeeze()
