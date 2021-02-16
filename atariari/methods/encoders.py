@@ -154,12 +154,21 @@ class NatureCNN(nn.Module):
 
     @property
     def local_layer_depth(self):
-        return self.main[4].out_channels
+        if self.downsample:
+            return self.main[2].out_channels    
+        else:
+            return self.main[4].out_channels
+
 
     def forward(self, inputs, fmaps=False):
-        f5 = self.main[:6](inputs)
-        f7 = self.main[6:8](f5)
-        out = self.main[8:](f7)
+        if self.downsample:
+            f5 = self.main[:4](inputs)
+            f7 = self.main[4:6](f5)
+            out = self.main[6:](f7)
+        else:
+            f5 = self.main[:6](inputs)
+            f7 = self.main[6:8](f5)
+            out = self.main[8:](f7)
         if self.end_with_relu:
             assert self.args.method != "vae", "can't end with relu and use vae!"
             out = F.relu(out)
