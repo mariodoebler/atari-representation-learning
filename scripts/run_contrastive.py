@@ -76,15 +76,35 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    config = {}
-    config.update(vars(args))
-    tags = [device.type, 'pretraining-only', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
+    tags = [device.type, 'pretraining-only', "fs: " + str(args.num_frame_stack), args.env_name, args.encoder_type, "batch size: " + str(
+        args.batch_size), "pretraining-steps: " + str(args.pretraining_steps)]
+    # kind of bad programming, but needed as all further previous code builds up on 'NO_downsample'...
+    args.no_downsample = not args.downsample
     if args.wandb_off:
         wandb = None
     else:
-        if args.name_logging:
-            wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
-        else:
+        if args.downsample:
+            tags.append("downsample84")
+        if not args.name_logging:
             wandb.init(project=args.wandb_proj, tags=tags)
+        else:
+            wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
+        config = {}
+        config.update(vars(args))
         wandb.config.update(config)
     train_encoder(args)
+    # parser = get_argparser()
+    # args = parser.parse_args()
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # config = {}
+    # config.update(vars(args))
+    # tags = [device.type, 'pretraining-only', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
+    # if args.wandb_off:
+    #     wandb = None
+    # else:
+    #     if args.name_logging:
+    #         wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
+    #     else:
+    #         wandb.init(project=args.wandb_proj, tags=tags)
+    #     wandb.config.update(config)
+    # train_encoder(args)
