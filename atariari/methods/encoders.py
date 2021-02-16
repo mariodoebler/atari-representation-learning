@@ -103,7 +103,13 @@ class NatureCNN(nn.Module):
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu
         self.args = args
-        self.input_110_84 = args.get("input_110_84", False)
+        if type(args) == dict:
+            self.input_110_84 = args.get("input_110_84", False)
+        else:
+            try:
+                self.input_110_84 = args['input_110_84']
+            except:
+                self.input_110_84 = False
         init_ = lambda m: init(m,
                                nn.init.orthogonal_,
                                lambda x: nn.init.constant_(x, 0),
