@@ -100,6 +100,7 @@ class NatureCNN(nn.Module):
         self.feature_size = args.feature_size
         self.hidden_size = self.feature_size
         self.downsample = not args.no_downsample
+        self.less_dense = args.less_dense
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu
         self.args = args
@@ -131,9 +132,14 @@ class NatureCNN(nn.Module):
                 #nn.ReLU()
             )
         else:
+            last_nr_conv_filters = 64
             if self.input_110_84:
                 self.final_conv_shape = (64, 3, 1)
                 self.final_conv_size = 64 * 3 * 1
+            elif self.less_dense:
+                last_nr_conv_filters = 30
+                self.final_conv_shape = (last_nr_conv_filters, 9, 6)
+                self.final_conv_size = last_nr_conv_filters * 9 * 6
             else:
                 self.final_conv_size = 64 * 9 * 6
                 self.final_conv_shape = (64, 9, 6)
@@ -144,7 +150,7 @@ class NatureCNN(nn.Module):
                 nn.ReLU(),
                 init_(nn.Conv2d(64, 128, 4, stride=2)),
                 nn.ReLU(),
-                init_(nn.Conv2d(128, 64, 3, stride=1)),
+                init_(nn.Conv2d(128, last_nr_conv_filters, 3, stride=1)),
                 nn.ReLU(),
                 Flatten(),
                 init_(nn.Linear(self.final_conv_size, self.feature_size)),
