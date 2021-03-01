@@ -101,6 +101,7 @@ class NatureCNN(nn.Module):
         self.hidden_size = self.feature_size
         self.downsample = not args.no_downsample
         self.less_dense = args.less_dense
+        self.more_dense = args.more_dense
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu
         self.args = args
@@ -118,14 +119,20 @@ class NatureCNN(nn.Module):
         self.flatten = Flatten()
 
         if self.downsample:
-            self.final_conv_size = 32 * 7 * 7
-            self.final_conv_shape = (32, 7, 7)
+            if self.more_dense:
+                last_nr_conv_filters = 70
+                self.final_conv_shape = (last_nr_conv_filters, 7, 7)
+                self.final_conv_size = last_nr_conv_filters * 7 * 7
+            else:
+                last_nr_conv_filters = 64 # default
+                self.final_conv_size = 32 * 7 * 7
+                self.final_conv_shape = (32, 7, 7)
             self.main = nn.Sequential(
                 init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
                 nn.ReLU(),
                 init_(nn.Conv2d(32, 64, 4, stride=2)),
                 nn.ReLU(),
-                init_(nn.Conv2d(64, 32, 3, stride=1)),
+                init_(nn.Conv2d(64, last_nr_conv_filters, 3, stride=1)),
                 nn.ReLU(),
                 Flatten(),
                 init_(nn.Linear(self.final_conv_size, self.feature_size)),
