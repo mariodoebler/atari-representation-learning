@@ -113,10 +113,10 @@ class NatureCNN(nn.Module):
         super().__init__()
         self.feature_size = args.feature_size
         self.hidden_size = self.feature_size
-        self.downsample = not args.no_downsample if args.no_downsample else False
-        self.less_dense = args.less_dense if args.less_dense else False
-        self.more_dense = args.more_dense if args.more_dense else False
-        self.more_spatial_dim = args.more_spatial_dim if args.more_spatial_dim else False
+        self.downsample = not args.no_downsample if args.no_downsample is not None else False
+        self.less_dense = args.less_dense if args.less_dense is not None else False
+        self.more_dense = args.more_dense if args.more_dense is not None else False
+        self.more_spatial_dim = args.more_spatial_dim if args.more_spatial_dim is not None else False
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu if args.end_with_relu else False
         self.args = args
