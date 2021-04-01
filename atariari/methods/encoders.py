@@ -139,7 +139,7 @@ class NatureCNN(nn.Module):
                 self.final_conv_shape = (last_nr_conv_filters, 7, 7)
                 self.final_conv_size = last_nr_conv_filters * 7 * 7
             else:
-                last_nr_conv_filters = 64 # default
+                last_nr_conv_filters = 32 # default
                 self.final_conv_size = 32 * 7 * 7
                 self.final_conv_shape = (32, 7, 7)
             self.main = nn.Sequential(
