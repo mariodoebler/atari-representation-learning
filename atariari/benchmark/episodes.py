@@ -45,7 +45,7 @@ checkpointed_steps_full_sorted = [1536, 1076736, 2151936, 3227136, 4302336, 5377
                                   45159936, 46235136, 47310336, 48385536, 49460736, 49999872]
 
 
-def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, train_mode="train_encoder"):
+def get_random_agent_rollouts(env_name, steps, seed=42, num_processes=1, num_frame_stack=1, downsample=False, color=False, use_extended_wrapper=False, train_mode="train_encoder", wandb=None):
     envs = make_vec_envs(env_name, seed, num_processes, num_frame_stack, downsample,
                          color, use_extended_wrapper=use_extended_wrapper, train_mode=train_mode)
     envs.reset()
@@ -257,7 +257,7 @@ def get_episodes(env_name,
                                                              downsample=downsample, color=color,
                                                              use_extended_wrapper=use_extended_wrapper,
                                                             #  no_offsets=no_offsets,
-                                                             train_mode=train_mode)
+                                                             train_mode=train_mode, wandb=wandb)
 
     elif collect_mode == "preprocessed_benchmark_dataset":
         tr_eps, val_eps, test_eps, tr_labels, val_labels, test_labels = get_preprocessed_benchmark_dataset(env_name=env_name,
