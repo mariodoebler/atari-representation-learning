@@ -12,18 +12,23 @@ import torch
 from baselines import bench
 from test_atariari.wrapper.atari_wrapper import make_atari, wrap_deepmind
 from .wrapper import AtariARIWrapper
-from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
+# from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
 import errno
 
-def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False):
+def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False, train_mode="train_encoder"):
     def _thunk():
         env = gym.make(env_id)
 
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
         if is_atari:
-            env = make_atari(env_id)
-            env = AtariARIWrapper(env)
+            env = make_atari(env_id)  # --> check that NoFrameskip-v4-env has been chosen; NoopReset
+            if train_mode == "probe":
+                env = AtariARIWrapper(env)  # --> add the labels based on the RAM-state to the info-dict
+            elif train_mode == "train_encoder":
+                pass
+            else:
+                raise ValueError
 
         env.seed(seed + rank)
 
@@ -36,10 +41,13 @@ def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_st
                 os.path.join(log_dir, str(rank)),
                 allow_early_resets=False)
 
-        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper)
-        if use_extended_wrapper:
-            # has to be used as last wrapper
-            env = AtariARIWrapperExtendedDeriveLabels(env) # has to be used ADDITIONALLY to AtariARIWrapperExtended!
+        # env = gym.wrappers.Monitor(env, '/home/cathrin/MA/datadump/videos/' + env_id, force=True)
+
+        # --> in the following order:
+        # EpisodicLifeEnv; FireResetEnv, Grayscaling, just for Pong: overlay Scores
+        # ScaleObservations to [0, 1]; ClipRewards; 
+        # for framestacking: MaxAndSkipAndFramestack, without Framstacking: MaxAndSkipEnv
+        env = wrap_deepmind(env, downsample=downsample, color=color, frame_stack=frame_stack, use_extended_wrapper=use_extended_wrapper, train_mode=train_mode)
 
         # convert to pytorch-style (C, H, W)
         env = ImageToPyTorch(env)
@@ -65,14 +73,14 @@ class ImageToPyTorch(gym.ObservationWrapper):
 
 
 
-def make_vec_envs(env_name, seed,  num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False):
+def make_vec_envs(env_name, seed, num_processes, num_frame_stack=1, downsample=True, color=False, gamma=0.99, log_dir='./tmp/', device=torch.device('cpu'), use_extended_wrapper=False, train_mode="train_encoder"):
     try:
         Path(log_dir).mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         if exc.errno != errno.EEXIST:
             raise
         pass
-    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack, use_extended_wrapper=use_extended_wrapper)
+    envs = [make_env(env_name, seed, i, log_dir, downsample, color, frame_stack=num_frame_stack, use_extended_wrapper=use_extended_wrapper, train_mode=train_mode)
             for i in range(num_processes)]
 
     if len(envs) > 1:

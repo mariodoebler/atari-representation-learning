@@ -79,7 +79,7 @@ class InfoNCESpatioTemporalTrainer(Trainer):
             for y in range(sy):
                 for x in range(sx):
                     # shape [B, 128]
-                    predictions = self.classifier1(f_t)
+                    predictions = self.classifier1(f_t) # "MLP in paper"
                     # shape [B, 128] --> SPATIAL (slice) location of the feature map 
                     positive = f_t_prev[:, y, x, :]
                     # shape [B, B]
@@ -144,7 +144,8 @@ class InfoNCESpatioTemporalTrainer(Trainer):
         
     def log_results(self, epoch_idx, epoch_loss1, epoch_loss2, epoch_loss, prefix=""):
         print("{} Epoch: {}, Epoch Loss: {}, {}".format(prefix.capitalize(), epoch_idx, epoch_loss,
-                                                                     prefix.capitalize()))
-        self.wandb.log({prefix + '_loss': epoch_loss,
-                        prefix + '_loss1': epoch_loss1,
-                        prefix + '_loss2': epoch_loss2}, step=epoch_idx)#, commit=False)
+                                                        prefix.capitalize()))
+        if self.wandb:
+            self.wandb.log({prefix + '_loss': epoch_loss,
+                            prefix + '_loss1': epoch_loss1,
+                            prefix + '_loss2': epoch_loss2}, step=epoch_idx)  # , commit=False)

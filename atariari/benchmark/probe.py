@@ -1,5 +1,6 @@
 from copy import deepcopy
 from typing import List, Union
+
 import numpy as np
 
 import torch
@@ -13,7 +14,10 @@ from .categorization import regression_keys, summary_key_dict
 from torch import nn
 from torch.utils.data import BatchSampler, RandomSampler
 
-from benchmarking.utils.helpers import calculate_mae_regression_score, combineMetricsPerCategory, createTableList
+from benchmarking.utils.helpers import (calculate_mae_regression_score,
+                                        calculate_top11_regression_score,
+                                        combineMetricsPerCategory,
+                                        createTableList)
 from benchmarking.utils.categorization_extended import (regression_keys_extended,
                                                         summary_key_dict_extended)
 
@@ -97,6 +101,9 @@ class ProbeTrainer():
             k: torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizers[k], patience=5, factor=0.2, verbose=True,
                                                           mode='max', min_lr=1e-5) for k in sample_label.keys()}
 
+        print("The deployed labels are:")
+        print([f"{l}" for l in sample_label.keys()])
+
     def generate_batch(self, episodes, episode_labels):
         total_steps = sum([len(e) for e in episodes])
         assert total_steps > self.batch_size
@@ -107,7 +114,9 @@ class ProbeTrainer():
                                              replacement=True, num_samples=total_steps),
                                self.batch_size, drop_last=True)
 
+        counter = 0
         for indices in sampler:
+            counter += 1
             episodes_batch = [episodes[x] for x in indices]
             episode_labels_batch = [episode_labels[x] for x in indices]
             xs, labels = [], appendabledict()
@@ -120,6 +129,7 @@ class ProbeTrainer():
                 xs.append(x)
                 labels.append_update(episode_labels_batch[ep_ind][t])
             yield torch.stack(xs).float().to(self.device) / 255., labels
+        print(f"yielded {counter} batches")
 
     def probe(self, batch, k):
         probe = self.probes[k]
@@ -138,7 +148,9 @@ class ProbeTrainer():
         else:
             with torch.no_grad():
                 self.encoder.to(self.device)
-                f = self.encoder(batch).detach()
+                f = self.encoder(batch).detach()  # RANGE [0, 1]!!!
+            if len(f.shape) == 4:
+                f = f.reshape(f.size(0), -1)
             preds = probe(f)
         return preds
 
@@ -187,7 +199,7 @@ class ProbeTrainer():
 
     def do_test_epoch(self, episodes, label_dicts, regression_keys=[]):
         sample_label = label_dicts[0][0]
-        accuracy_dict, f1_score_dict, mae_regression_score_dict = {}, {}, {}
+        accuracy_dict, f1_score_dict, mae_regression_score_dict, top11_regression_score_dict = {}, {}, {}, {}
         pred_dict, all_label_dict = {k: [] for k in sample_label.keys()}, \
                                     {k: [] for k in sample_label.keys()}
 
@@ -212,8 +224,10 @@ class ProbeTrainer():
             if k in regression_keys:
                 mae_regression_score_dict[k] = calculate_mae_regression_score(
                     preds, labels, label_key=k)
+                top11_regression_score_dict[k] = calculate_top11_regression_score(
+                    preds, labels, label_key=k)
 
-        return accuracy_dict, f1_score_dict, mae_regression_score_dict
+        return accuracy_dict, f1_score_dict, mae_regression_score_dict, top11_regression_score_dict
 
     def train(self, tr_eps, val_eps, tr_labels, val_labels):
         # if not self.encoder:
@@ -260,22 +274,39 @@ class ProbeTrainer():
         for k, probe in self.probes.items():
             probe.eval()
 
-        regression_keys_list = list(set(regression_keys + regression_keys_extended))
-        acc_dict, f1_dict, mae_regression_dict = self.do_test_epoch(
+        if self.use_extended_wrapper:
+            regression_keys_ext = regression_keys_extended
+        else:
+            regression_keys_ext = []
+        regression_keys_list = list(set(regression_keys + regression_keys_ext))
+        # regression_keys: ALL possible (from ALL games)
+        acc_dict, f1_dict, mae_regression_dict, top11_regression_dict = self.do_test_epoch(
             test_episodes, test_label_dicts, regression_keys=regression_keys_list)
 
         # for regression-metrics-comparison
-        wanted_keys = regression_keys_list + ["across_categories_avg", "overall_avg"]
-        acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, metrics_per_category_dict, table_test = postprocess_raw_metrics(
-            acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_keys=wanted_keys)
+        wanted_categories = list(set(list(
+            summary_key_dict_extended.keys()) + ["across_categories_avg", "overall_avg"]))
+        acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict, metrics_per_category_dict, table_test = postprocess_raw_metrics(
+            acc_dict, f1_dict, mae_regression_dict, top11_regression_dict, use_extended_wrapper=self.use_extended_wrapper, wanted_categories=wanted_categories, regression_keys_list=regression_keys_list)
         print("""In our paper, we report F1 scores and accuracies averaged across each category. 
               That is, we take a mean across all state variables in a category to get the average score for that category.
               Then we average all the category averages to get the final score that we report per game for each method. 
               These scores are called \'across_categories_avg_acc\' and \'across_categories_avg_f1\' respectively
               We do this to prevent categories with large number of state variables dominating the mean F1 score.
               """)
-        self.log_results("Test", acc_dict, f1_dict, mae_regression_dict, mae_f1_dict)
-        return acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, metrics_per_category_dict, table_test
+
+        acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict = self.roundResults(
+            acc_dict=acc_dict, f1_dict=f1_dict, mae_regression_dict=mae_regression_dict, mae_f1_dict=mae_f1_dict, top11_regression_dict=top11_regression_dict, top11_f1_dict=top11_f1_dict)
+        self.log_results("Test", acc_dict, f1_dict, mae_regression_dict,
+                         mae_f1_dict, top11_regression_dict, top11_f1_dict)
+        return acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict, metrics_per_category_dict, table_test
+
+    def roundResults(self, **kwargs):
+        metrics = []
+        for metric in kwargs:
+            metric = {k: np.round(v, 4) for k, v in kwargs[metric].items()}
+            metrics.append(deepcopy(metric))
+        return metrics
 
     def log_results(self, epoch_idx, *dictionaries):
         print("Epoch: {}".format(epoch_idx))
@@ -285,29 +316,41 @@ class ProbeTrainer():
             print("\t --")
 
 
-def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended_wrapper, wanted_keys: List[str] = []) -> Union[dict, dict, dict, dict, dict]:
-    mae_f1_dict = combineMAEF1Dicts(mae_regression_dict, f1_dict)
-    acc_overall_avg, f1_overall_avg, mae_regression_overall_avg, mae_f1_overall_avg = compute_dict_average(acc_dict), \
+def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, top11_regression_dict, use_extended_wrapper, wanted_categories: List[str] = [], regression_keys_list: List[str] = []) -> Union[dict, dict, dict, dict, dict]:
+    mae_f1_dict = combineRegressionAndF1Dicts(
+        regression_dict=mae_regression_dict, f1_dict=f1_dict)
+    top11_f1_dict = combineRegressionAndF1Dicts(
+        regression_dict=top11_regression_dict, f1_dict=f1_dict)
+
+    acc_overall_avg, f1_overall_avg, mae_regression_overall_avg, mae_f1_overall_avg, top11_regression_overall_avg, top11_f1_overall_avg = compute_dict_average(acc_dict), \
         compute_dict_average(f1_dict), \
         compute_dict_average(mae_regression_dict), \
-        compute_dict_average(mae_f1_dict)
+        compute_dict_average(mae_f1_dict), \
+        compute_dict_average(top11_regression_dict), \
+        compute_dict_average(top11_f1_dict)
 
-    acc_category_avgs_dict, f1_category_avgs_dict, mae_regression_category_avgs_dict, mae_f1_category_avgs_dict = \
+    acc_category_avgs_dict, f1_category_avgs_dict, mae_regression_category_avgs_dict, mae_f1_category_avgs_dict, top11_regression_category_avgs_dict, top11_f1_category_avgs_dict = \
         compute_category_avgs(acc_dict, use_extended_wrapper), \
         compute_category_avgs(f1_dict, use_extended_wrapper), \
         compute_category_avgs(mae_regression_dict, use_extended_wrapper), \
-        compute_category_avgs(mae_f1_dict, use_extended_wrapper)
+        compute_category_avgs(mae_f1_dict, use_extended_wrapper), \
+        compute_category_avgs(top11_regression_dict, use_extended_wrapper), \
+        compute_category_avgs(top11_f1_dict, use_extended_wrapper)
 
-    acc_avg_across_categories, f1_avg_across_categories, mae_regression_avg_across_categories, mae_f1_avg_across_categories = \
+    acc_avg_across_categories, f1_avg_across_categories, mae_regression_avg_across_categories, mae_f1_avg_across_categories, top11_regression_avg_across_categories, top11_f1_avg_across_categories = \
         compute_dict_average(acc_category_avgs_dict), \
         compute_dict_average(f1_category_avgs_dict), \
         compute_dict_average(mae_regression_category_avgs_dict), \
-        compute_dict_average(mae_f1_category_avgs_dict)
+        compute_dict_average(mae_f1_category_avgs_dict), \
+        compute_dict_average(top11_regression_category_avgs_dict), \
+        compute_dict_average(top11_f1_category_avgs_dict)
 
     acc_dict.update(acc_category_avgs_dict)
     f1_dict.update(f1_category_avgs_dict)
     mae_regression_dict.update(mae_regression_category_avgs_dict)
     mae_f1_dict.update(mae_f1_category_avgs_dict)
+    top11_regression_dict.update(top11_regression_category_avgs_dict)
+    top11_f1_dict.update(top11_f1_category_avgs_dict)
 
     acc_dict["overall_avg"], f1_dict["overall_avg"] = acc_overall_avg, f1_overall_avg
     mae_regression_dict["overall_avg"], mae_f1_dict["overall_avg"] = mae_regression_overall_avg, mae_f1_overall_avg
@@ -315,21 +358,29 @@ def postprocess_raw_metrics(acc_dict, f1_dict, mae_regression_dict, use_extended
                                                                            f1_avg_across_categories]
     mae_regression_dict["across_categories_avg"], mae_f1_dict["across_categories_avg"] = \
         [mae_regression_avg_across_categories, mae_f1_avg_across_categories]
+    top11_regression_dict["across_categories_avg"], top11_f1_dict["across_categories_avg"] = \
+        [top11_regression_avg_across_categories, top11_f1_avg_across_categories]
 
-    compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=wanted_keys, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
-    table_test = createTableList(f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict)
-    
+    compare_metrics_per_category_dict = combineMetricsPerCategory(
+        wanted_categories_keys=wanted_categories, f1=f1_dict, mae=mae_regression_dict, mae_f1=mae_f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
+    # compare_metrics_per_category_dict = combineMetricsPerCategory(wanted_regression_keys=regression_keys_list, f1=f1_dict, top11=top11_regression_dict, top11_f1=top11_f1_dict)
+    table_test = createTableList(f1=f1_dict, mae=mae_regression_dict,
+                                 mae_f1=mae_f1_dict, top_11=top11_regression_dict, top11_f1=top11_f1_dict)
+
     acc_dict = append_suffix(acc_dict, "_acc")
     f1_dict = append_suffix(f1_dict, "_f1")
     mae_regression_dict = append_suffix(mae_regression_dict, "_mae_regression")
     mae_f1_dict = append_suffix(mae_f1_dict, "_mae_f1")
+    top11_regression_dict = append_suffix(
+        top11_regression_dict, "_top11_regression")
+    top11_f1_dict = append_suffix(top11_f1_dict, "_top11_f1")
 
-    return acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, compare_metrics_per_category_dict, table_test
+    return acc_dict, f1_dict, mae_regression_dict, mae_f1_dict, top11_regression_dict, top11_f1_dict, compare_metrics_per_category_dict, table_test
 
 
-def combineMAEF1Dicts(mae_regression_dict, f1_dict):
+def combineRegressionAndF1Dicts(regression_dict, f1_dict):
     # ORDER important: keys which exist in both are taken from the second dict (regression one) and replace the classification ones!
-    return {**f1_dict, **mae_regression_dict}
+    return {**f1_dict, **regression_dict}
 
 
 def compute_category_avgs(metric_dict, use_extended_wrapper):
@@ -338,11 +389,19 @@ def compute_category_avgs(metric_dict, use_extended_wrapper):
         summary_key_dictionary = summary_key_dict_extended
     else:
         summary_key_dictionary = summary_key_dict
+
+    print("\nCategories are:")
     for category_name, category_keys in summary_key_dictionary.items():
         category_values = [
             v for k, v in metric_dict.items() if k in category_keys]
+        category_values_names = [
+            k for k, v in metric_dict.items() if k in category_keys]
         if len(category_values) < 1:
             continue
         category_mean = np.mean(category_values)
         category_dict[category_name + "_avg"] = category_mean
+        print(category_name)
+        for v in category_values_names:
+            print("\t" + v)
+
     return category_dict

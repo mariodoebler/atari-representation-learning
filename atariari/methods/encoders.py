@@ -93,16 +93,40 @@ class ImpalaCNN(nn.Module):
 
         return out
 
+from prettytable import PrettyTable
+def count_parameters(model):
+    table = PrettyTable(["Modules", "Parameters"])
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad: continue
+        param = parameter.numel()
+        table.add_row([name, param])
+        total_params+=param
+    print(table)
+    print(f"Total Trainable Params: {total_params}")
+    return total_params
+
+
 class NatureCNN(nn.Module):
 
     def __init__(self, input_channels, args):
         super().__init__()
         self.feature_size = args.feature_size
         self.hidden_size = self.feature_size
-        self.downsample = not args.no_downsample
+        self.downsample = not args.no_downsample if args.no_downsample is not None else False
+        self.less_dense = args.less_dense if args.less_dense is not None else False
+        self.more_dense = args.more_dense if args.more_dense is not None else False
+        self.more_spatial_dim = args.more_spatial_dim if args.more_spatial_dim is not None else False
         self.input_channels = input_channels
-        self.end_with_relu = args.end_with_relu
+        self.end_with_relu = args.end_with_relu if args.end_with_relu else False
         self.args = args
+        if type(args) == dict:
+            self.input_110_84 = args.get("input_110_84", False)
+        else:
+            try:
+                self.input_110_84 = args['input_110_84']
+            except:
+                self.input_110_84 = False
         init_ = lambda m: init(m,
                                nn.init.orthogonal_,
                                lambda x: nn.init.constant_(x, 0),
@@ -110,45 +134,70 @@ class NatureCNN(nn.Module):
         self.flatten = Flatten()
 
         if self.downsample:
-            self.final_conv_size = 32 * 7 * 7
-            self.final_conv_shape = (32, 7, 7)
+            if self.more_dense:
+                last_nr_conv_filters = 70
+                self.final_conv_shape = (last_nr_conv_filters, 7, 7)
+                self.final_conv_size = last_nr_conv_filters * 7 * 7
+            else:
+                last_nr_conv_filters = 32 # default
+                self.final_conv_size = 32 * 7 * 7
+                self.final_conv_shape = (32, 7, 7)
             self.main = nn.Sequential(
-                init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
+                init_(nn.Conv2d(input_channels, 32, 8, stride=4)), # (20, 20)
                 nn.ReLU(),
-                init_(nn.Conv2d(32, 64, 4, stride=2)),
+                init_(nn.Conv2d(32, 64, 4, stride=2)), # (9, 9)
                 nn.ReLU(),
-                init_(nn.Conv2d(64, 32, 3, stride=1)),
+                init_(nn.Conv2d(64, last_nr_conv_filters, 3, stride=1)), # (7,7) --> taken and flattened!
                 nn.ReLU(),
                 Flatten(),
                 init_(nn.Linear(self.final_conv_size, self.feature_size)),
                 #nn.ReLU()
             )
         else:
-            self.final_conv_size = 64 * 9 * 6
-            self.final_conv_shape = (64, 9, 6)
+            last_nr_conv_filters = 64
+            if self.input_110_84:
+                self.final_conv_shape = (64, 3, 1)
+                self.final_conv_size = 64 * 3 * 1
+            elif self.less_dense:
+                last_nr_conv_filters = 30
+                self.final_conv_shape = (last_nr_conv_filters, 9, 6)
+                self.final_conv_size = last_nr_conv_filters * 9 * 6
+            else:
+                self.final_conv_size = 64 * 9 * 6
+                self.final_conv_shape = (64, 9, 6)
             self.main = nn.Sequential(
-                init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
+                init_(nn.Conv2d(input_channels, 32, 8, stride=4)),  # (51, 39)
                 nn.ReLU(),
-                init_(nn.Conv2d(32, 64, 4, stride=2)),
+                init_(nn.Conv2d(32, 64, 4, stride=2)), # (24, 18)
                 nn.ReLU(),
-                init_(nn.Conv2d(64, 128, 4, stride=2)),
+                init_(nn.Conv2d(64, 128, 4, stride=2)),  # (11, 8)
                 nn.ReLU(),
-                init_(nn.Conv2d(128, 64, 3, stride=1)),
+                init_(nn.Conv2d(128, last_nr_conv_filters, 3, stride=1)), # (9, 6) --> taken and flattend
                 nn.ReLU(),
                 Flatten(),
                 init_(nn.Linear(self.final_conv_size, self.feature_size)),
                 #nn.ReLU()
             )
+        # count_parameters(self.main)
         self.train()
 
     @property
     def local_layer_depth(self):
-        return self.main[4].out_channels
+        if self.downsample:
+            return self.main[2].out_channels    
+        else:
+            return self.main[4].out_channels
+
 
     def forward(self, inputs, fmaps=False):
-        f5 = self.main[:6](inputs)
-        f7 = self.main[6:8](f5)
-        out = self.main[8:](f7)
+        if self.downsample:
+            f5 = self.main[:4](inputs)
+            f7 = self.main[4:6](f5)
+            out = self.main[6:](f7)
+        else:
+            f5 = self.main[:6](inputs)
+            f7 = self.main[6:8](f5)
+            out = self.main[8:](f7)
         if self.end_with_relu:
             assert self.args.method != "vae", "can't end with relu and use vae!"
             out = F.relu(out)
