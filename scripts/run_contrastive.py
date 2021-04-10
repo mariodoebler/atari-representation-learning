@@ -20,7 +20,7 @@ from atariari.methods.no_action_feedforward_predictor import NaFFPredictorTraine
 from atariari.benchmark.episodes import get_episodes
 
 
-def train_encoder(args):
+def train_encoder(args, wandb):
     device = torch.device("cuda:" + str(args.cuda_id) if torch.cuda.is_available() else "cpu")
     tr_eps, val_eps = get_episodes(steps=args.pretraining_steps,
                                  env_name=args.env_name,
@@ -39,6 +39,9 @@ def train_encoder(args):
 
     observation_shape = tr_eps[0][0].shape
     if args.encoder_type == "Nature":
+        args.less_dense = False
+        args.more_dense = False
+        args.more_spatial_dim = False
         encoder = NatureCNN(observation_shape[0], args)
     elif args.encoder_type == "Impala":
         encoder = ImpalaCNN(observation_shape[0], args)
@@ -77,11 +80,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tags = [device.type, 'pretraining-only', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "epochs: " + str(args.epochs)]
-    if not args.name_logging:
-        wandb.init(project=args.wandb_proj, tags=tags)
-    else:
-        wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
+    ## kind of bad programming, but needed as all further previous code builds up on 'NO_downsample'...
+    args.no_downsample = not args.downsample
+    if args.downsample:
+        tags.append("downsample84")
     config = {}
     config.update(vars(args))
-    wandb.config.update(config)
-    train_encoder(args)
+    if args.wandb_off:
+        wandb = None
+    else:
+        if not args.name_logging:
+            wandb.init(project=args.wandb_proj, tags=tags)
+        else:
+            wandb.init(project=args.wandb_proj, tags=tags, name=args.name_logging)
+        wandb.config.update(config)
+    train_encoder(args, wandb)
