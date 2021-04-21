@@ -1,11 +1,15 @@
+import os
+import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from a2c_ppo_acktr.utils import init
-import time
+
 from atariari.benchmark.utils import download_run
 from atariari.benchmark.episodes import checkpointed_steps_full_sorted
-import os
+
 
 class Flatten(nn.Module):
     def forward(self, x):
@@ -94,6 +98,8 @@ class ImpalaCNN(nn.Module):
         return out
 
 from prettytable import PrettyTable
+
+
 def count_parameters(model):
     table = PrettyTable(["Modules", "Parameters"])
     total_params = 0
@@ -114,9 +120,9 @@ class NatureCNN(nn.Module):
         self.feature_size = args.feature_size
         self.hidden_size = self.feature_size
         self.downsample = not args.no_downsample if args.no_downsample is not None else False
-        self.less_dense = args.less_dense if args.less_dense is not None else False
-        self.more_dense = args.more_dense if args.more_dense is not None else False
-        self.more_spatial_dim = args.more_spatial_dim if args.more_spatial_dim is not None else False
+        self.less_dense = False #args.less_dense if args.less_dense is not None else False
+        self.more_dense = False #args.more_dense if args.more_dense is not None else False
+        self.more_spatial_dim = False #args.more_spatial_dim if args.more_spatial_dim is not None else False
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu if args.end_with_relu else False
         self.args = args

@@ -1,24 +1,25 @@
 import os
 import time
 
-import pickle
 from itertools import chain
 from collections import deque
+
+import torch
+import numpy as np
+import pickle5 as pickle
 
 from PIL import Image
 from torchvision import transforms
 
-import torch
-import numpy as np
-
 from .envs import make_vec_envs
 from .utils import download_run
-from .label_preprocess import (scaleLabels, subtractOffsetsLabels, remove_duplicates,
-                               remove_low_entropy_labels)
-from benchmarking.utils.process_dataset import convertDataType
+from .label_preprocess import (remove_duplicates, remove_low_entropy_labels,
+                               scaleLabels, subtractOffsetsLabels)
+
 from benchmarking.utils.helpers import (analyzeDebugEpisodes,
                                         countAndReportSampleNumbers,
                                         remove_invalid_episodes)
+from benchmarking.utils.process_dataset import convertDataType
 
 try:
     import wandb
@@ -124,7 +125,7 @@ def get_filepath_dataset(dataset_path, env_name):
     files = os.listdir(dataset_path)
     pkl_files = [f for f in files if f.endswith("_processed.pkl")]
     filepath = [os.path.join(dataset_path, f) for f in pkl_files if env_name.lower() in f.lower()]
-    assert len(filepath) == 1, f"there is more than 1 processed.pkl file for the game {env_name}!"
+    assert len(filepath) == 1, f"ERROR: there is {len(filepath)} processed.pkl file for the game {env_name} in {dataset_path}!"
     print(f"Filepath for game {env_name} is: {filepath[0]}")
     return filepath[0]
 
@@ -313,13 +314,14 @@ def get_episodes(env_name,
         print(f"inds shuffled are {*inds,}")
 
     # important: FIRST subtract offsets, then SCALE! 
-    if not no_offsets and train_mode == "probe" and "spaceinvaders" not in env_name.lower():
-        if collect_mode == "preprocessed_benchmark_dataset":
-            tr_labels = subtractOffsetsLabels(tr_labels, env_name)
-            val_labels = subtractOffsetsLabels(val_labels, env_name)
-            test_labels = subtractOffsetsLabels(test_labels, env_name)
-        else:
-            episode_labels = subtractOffsetsLabels(episode_labels, env_name)
+    if not no_offsets and train_mode == "probe":
+        if "battle" not in env_name.lower() and "space" not in env_name.lower() and "frost" not in env_name.lower():
+            if collect_mode == "preprocessed_benchmark_dataset":
+                tr_labels = subtractOffsetsLabels(tr_labels, env_name)
+                val_labels = subtractOffsetsLabels(val_labels, env_name)
+                test_labels = subtractOffsetsLabels(test_labels, env_name)
+            else:
+                episode_labels = subtractOffsetsLabels(episode_labels, env_name)
 
     if (use_extended_wrapper and train_mode == "probe"): 
         # scaling depends whether offsets have been subtracted or not!
