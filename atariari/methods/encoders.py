@@ -1,14 +1,15 @@
 import os
 import time
 
+from atariari.benchmark.utils import download_run
+from atariari.benchmark.episodes import checkpointed_steps_full_sorted
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from prettytable import PrettyTable
 from a2c_ppo_acktr.utils import init
-
-from atariari.benchmark.utils import download_run
-from atariari.benchmark.episodes import checkpointed_steps_full_sorted
 
 
 class Flatten(nn.Module):
@@ -97,7 +98,6 @@ class ImpalaCNN(nn.Module):
 
         return out
 
-from prettytable import PrettyTable
 
 
 def count_parameters(model):
@@ -120,19 +120,16 @@ class NatureCNN(nn.Module):
         self.feature_size = args.feature_size
         self.hidden_size = self.feature_size
         self.downsample = not args.no_downsample if args.no_downsample is not None else False
-        self.less_dense = False #args.less_dense if args.less_dense is not None else False
-        self.more_dense = False #args.more_dense if args.more_dense is not None else False
-        self.more_spatial_dim = False #args.more_spatial_dim if args.more_spatial_dim is not None else False
         self.input_channels = input_channels
         self.end_with_relu = args.end_with_relu if args.end_with_relu else False
         self.args = args
-        if type(args) == dict:
-            self.input_110_84 = args.get("input_110_84", False)
-        else:
-            try:
-                self.input_110_84 = args['input_110_84']
-            except:
-                self.input_110_84 = False
+        # if type(args) == dict:
+        #     self.input_110_84 = args.get("input_110_84", False)
+        # else:
+        #     try:
+        #         self.input_110_84 = args['input_110_84']
+        #     except:
+        #         self.input_110_84 = False
         init_ = lambda m: init(m,
                                nn.init.orthogonal_,
                                lambda x: nn.init.constant_(x, 0),
@@ -140,14 +137,9 @@ class NatureCNN(nn.Module):
         self.flatten = Flatten()
 
         if self.downsample:
-            if self.more_dense:
-                last_nr_conv_filters = 70
-                self.final_conv_shape = (last_nr_conv_filters, 7, 7)
-                self.final_conv_size = last_nr_conv_filters * 7 * 7
-            else:
-                last_nr_conv_filters = 32 # default
-                self.final_conv_size = 32 * 7 * 7
-                self.final_conv_shape = (32, 7, 7)
+            last_nr_conv_filters = 32 # default
+            self.final_conv_size = 32 * 7 * 7
+            self.final_conv_shape = (32, 7, 7)
             self.main = nn.Sequential(
                 init_(nn.Conv2d(input_channels, 32, 8, stride=4)), # (20, 20)
                 nn.ReLU(),
@@ -161,16 +153,16 @@ class NatureCNN(nn.Module):
             )
         else:
             last_nr_conv_filters = 64
-            if self.input_110_84:
-                self.final_conv_shape = (64, 3, 1)
-                self.final_conv_size = 64 * 3 * 1
-            elif self.less_dense:
-                last_nr_conv_filters = 30
-                self.final_conv_shape = (last_nr_conv_filters, 9, 6)
-                self.final_conv_size = last_nr_conv_filters * 9 * 6
-            else:
-                self.final_conv_size = 64 * 9 * 6
-                self.final_conv_shape = (64, 9, 6)
+            # if self.input_110_84:
+            #     self.final_conv_shape = (64, 3, 1)
+            #     self.final_conv_size = 64 * 3 * 1
+            # elif self.less_dense:
+            #     last_nr_conv_filters = 30
+            #     self.final_conv_shape = (last_nr_conv_filters, 9, 6)
+            #     self.final_conv_size = last_nr_conv_filters * 9 * 6
+            # else:
+            self.final_conv_size = 64 * 9 * 6
+            self.final_conv_shape = (64, 9, 6)
             self.main = nn.Sequential(
                 init_(nn.Conv2d(input_channels, 32, 8, stride=4)),  # (51, 39)
                 nn.ReLU(),

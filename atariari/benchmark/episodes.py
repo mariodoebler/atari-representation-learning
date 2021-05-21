@@ -144,6 +144,11 @@ def get_preprocessed_benchmark_dataset(env_name, steps):
     filepath_dataset = get_filepath_dataset(dataset_path, env_name)
     with open(filepath_dataset, 'rb') as f:
         data = pickle.load(f)
+    # except ValueError:  # pickle5...
+    #     import pickle5 as pickle
+
+    #     with open(filepath_dataset, 'rb') as f:
+    #         data = pickle.load(f)
     print(f"loaded data via pickle")
     tr_labels, val_labels, test_labels = data["training_labels"], data["validation_labels"], data["test_labels"]
     verify_amount_steps(tr_labels, val_labels, test_labels, steps_wanted=steps, debugging=not gpu)

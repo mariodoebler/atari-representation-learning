@@ -1,11 +1,15 @@
 import sys
-import numpy as np
+
 from itertools import chain
+
 import torch
 import wandb
-from test_atariari.utils.atari_offset_dict import getOffsetDict
-from benchmarking.utils.process_velocities import scalings
+import numpy as np
 import matplotlib.pyplot as plt
+
+from benchmarking.utils.process_velocities import scalings
+from reinforcement_learning.utils.atari_offset_dict import getOffsetDict
+
 
 def remove_duplicates(tr_eps, val_eps, test_eps, test_labels):
     """

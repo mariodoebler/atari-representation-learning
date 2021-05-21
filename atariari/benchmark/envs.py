@@ -1,19 +1,26 @@
-import cv2
-from baselines.common.vec_env import SubprocVecEnv, DummyVecEnv
-from gym import spaces
-
-from a2c_ppo_acktr.envs import TimeLimitMask, TransposeImage, VecPyTorch, VecNormalize, \
-    VecPyTorchFrameStack
-from pathlib import Path
 import os
+
+from pathlib import Path
+
+import cv2
 import gym
-import numpy as np
 import torch
+import numpy as np
+
+from gym import spaces
+from a2c_ppo_acktr.envs import (TimeLimitMask, TransposeImage, VecNormalize,
+                                VecPyTorch, VecPyTorchFrameStack)
+
 from baselines import bench
-from test_atariari.wrapper.atari_wrapper import make_atari, wrap_deepmind
+from baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
+
 from .wrapper import AtariARIWrapper
+from reinforcement_learning.wrapper.atari_wrapper import (make_atari,
+                                                          wrap_deepmind)
+
 # from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
 import errno
+
 
 def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False, train_mode="train_encoder"):
     def _thunk():
