@@ -1,4 +1,5 @@
 import os
+import errno
 
 from pathlib import Path
 
@@ -17,9 +18,6 @@ from baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 from .wrapper import AtariARIWrapper
 from reinforcement_learning.wrapper.atari_wrapper import (make_atari,
                                                           wrap_deepmind)
-
-# from benchmarking.utils.wrapper_extended import AtariARIWrapperExtendedDeriveLabels
-import errno
 
 
 def make_env(env_id, seed, rank, log_dir, downsample=True, color=False, frame_stack=4, use_extended_wrapper=False, train_mode="train_encoder"):

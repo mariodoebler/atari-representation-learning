@@ -7,7 +7,7 @@ import wandb
 import numpy as np
 import matplotlib.pyplot as plt
 
-from benchmarking.utils.process_velocities import scalings
+from benchmark.utils.process_velocities import scalings
 from reinforcement_learning.utils.atari_offset_dict import getOffsetDict
 
 

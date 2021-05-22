@@ -16,10 +16,10 @@ from .utils import download_run
 from .label_preprocess import (remove_duplicates, remove_low_entropy_labels,
                                scaleLabels, subtractOffsetsLabels)
 
-from benchmarking.utils.helpers import (analyzeDebugEpisodes,
+from benchmark.utils.helpers import (analyzeDebugEpisodes,
                                         countAndReportSampleNumbers,
                                         remove_invalid_episodes)
-from benchmarking.utils.process_dataset import convertDataType
+from benchmark.utils.process_dataset import convertDataType
 
 try:
     import wandb

@@ -1,9 +1,11 @@
 from copy import deepcopy
 from typing import List, Union
 
+import torch
 import numpy as np
 
-import torch
+from torch import nn
+from torch.utils.data import BatchSampler, RandomSampler
 
 from .utils import (append_suffix, appendabledict,
                     calculate_multiclass_accuracy,
@@ -11,15 +13,11 @@ from .utils import (append_suffix, appendabledict,
                     EarlyStopping)
 from .categorization import regression_keys, summary_key_dict
 
-from torch import nn
-from torch.utils.data import BatchSampler, RandomSampler
-
-from benchmarking.utils.helpers import (calculate_mae_regression_score,
-                                        calculate_top11_regression_score,
-                                        combineMetricsPerCategory,
-                                        createTableList)
-from benchmarking.utils.categorization_extended import (regression_keys_extended,
-                                                        summary_key_dict_extended)
+from benchmark.utils.helpers import (calculate_mae_regression_score,
+                                     calculate_top11_regression_score,
+                                     combineMetricsPerCategory, createTableList)
+from benchmark.utils.categorization_extended import (regression_keys_extended,
+                                                     summary_key_dict_extended)
 
 
 class LinearProbe(nn.Module):
