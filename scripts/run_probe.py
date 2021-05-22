@@ -1,9 +1,6 @@
 import os
 import sys
 
-import torch
-import wandb
-
 from scripts.run_contrastive import train_encoder
 
 from atariari.methods.utils import (get_argparser, probe_only_methods,
@@ -13,6 +10,9 @@ from atariari.methods.majority import majority_baseline
 from atariari.benchmark.probe import ProbeTrainer
 from atariari.benchmark.episodes import get_episodes
 
+import torch
+import wandb
+
 
 def run_probe(args):
     wandb.config.update(vars(args))
@@ -21,7 +21,7 @@ def run_probe(args):
                                                                                  seed=args.seed,
                                                                                  num_processes=args.num_processes,
                                                                                  num_frame_stack=args.num_frame_stack,
-                                                                                 downsample=not args.no_downsample,
+                                                                                 downsample=args.downsample,
                                                                                  color=args.color,
                                                                                  entropy_threshold=args.entropy_threshold,
                                                                                  collect_mode=args.probe_collect_mode,
@@ -78,9 +78,6 @@ def run_probe(args):
 
         trainer.train(tr_eps, val_eps, tr_labels, val_labels)
         test_acc, test_f1score = trainer.test(test_eps, test_labels)
-        # trainer = SKLearnProbeTrainer(encoder=encoder)
-        # test_acc, test_f1score = trainer.train_test(tr_eps, val_eps, tr_labels, val_labels,
-        #                                             test_eps, test_labels)
 
     print(test_acc, test_f1score)
     wandb.log(test_acc)
@@ -93,13 +90,9 @@ if __name__ == "__main__":
     if (args.weights_path and args.passing_file) is None:
         args.train_encoder = False
 
-    # if args.batch_size > args.num_processes:
-    #     print(f"Batch size was set to {args.batch_size} but should be maximum {args.num_processes} (args.num-processes)")
-    #     sys.exit(0)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tags = [device.type, 'probe', "fs: " + str(args.num_frame_stack) , args.env_name, args.encoder_type, "batch size: " + str(args.batch_size), "pretraining-steps: " + str(args.pretraining_steps), "probe steps: " + str(args.probe_steps), "epochs: " + str(args.epochs)]
     if args.wandb_off:
         os.environ["WANDB_MODE"] ="dryrun"
     wandb.init(project=args.wandb_proj, entity=args.wandb_entity, tags=tags)
-    #print(f"Running now for environment {args.env-name}")
     run_probe(args)

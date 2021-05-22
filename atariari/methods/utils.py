@@ -1,14 +1,17 @@
-import argparse
-import copy
 import os
+import copy
+import argparse
 import subprocess
+
+from collections import defaultdict
 
 import torch
 import numpy as np
+
 from sklearn.metrics import f1_score as compute_f1_score
+
 from a2c_ppo_acktr.envs import make_vec_envs
 from a2c_ppo_acktr.utils import get_vec_normalize
-from collections import defaultdict
 
 # methods that need encoder trained before
 train_encoder_methods = ['cpc', 'jsd-stdim', 'vae', "naff", "infonce-stdim", "global-infonce-stdim",
